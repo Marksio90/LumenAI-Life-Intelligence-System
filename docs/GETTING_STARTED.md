@@ -2,13 +2,73 @@
 
 ## Prerequisites
 
-Before you begin, ensure you have the following installed:
-- **Docker** (version 20.10+) and **Docker Compose** (version 2.0+)
-- **Python 3.11+** (for local development)
-- **Node.js 20+** and **npm** (for frontend development)
-- **Git**
+Choose one of the following setups:
 
-## Quick Start (Docker - Recommended)
+### Option A: Docker (Easiest - Recommended for Production)
+- **Docker** (version 20.10+) and **Docker Compose** (version 2.0+)
+
+### Option B: Mamba/Conda (Best for Development)
+- **Mamba** or **Conda** (automatically installed by setup script)
+- **Node.js 20+** and **npm** (for frontend)
+
+### Option C: Manual Setup
+- **Python 3.11+**
+- **Node.js 20+** and **npm**
+- **MongoDB**, **Redis**, **ChromaDB** (manual installation)
+
+---
+
+## 🐍 Quick Start with Mamba (Recommended for ML Development)
+
+Perfect for data scientists and ML engineers who want to experiment locally!
+
+### 1. Clone the Repository
+
+```bash
+git clone <repository-url>
+cd LumenAI-Life-Intelligence-System
+```
+
+### 2. One-Command Setup
+
+```bash
+# This will install Mamba and create the environment
+make mamba-setup
+
+# Or run directly:
+./setup_mamba.sh
+```
+
+### 3. Configure Environment
+
+```bash
+cp .env.example .env
+# Edit .env and add your OPENAI_API_KEY or ANTHROPIC_API_KEY
+```
+
+### 4. Activate and Run
+
+```bash
+# Activate the environment
+mamba activate lumenai
+
+# Start backend
+make backend-dev
+```
+
+In a separate terminal:
+```bash
+# Start frontend
+make frontend-dev
+```
+
+Visit http://localhost:3000 - you're ready! 🎉
+
+**See [Mamba Setup Guide](./MAMBA_SETUP.md) for detailed instructions.**
+
+---
+
+## 🐳 Quick Start with Docker (Production-Ready)
 
 ### 1. Clone the Repository
 
@@ -47,6 +107,24 @@ This will start all services:
 ### 4. Open LumenAI
 
 Visit http://localhost:3000 in your browser and start chatting!
+
+## Comparison: Mamba vs Docker
+
+| Feature | Mamba | Docker |
+|---------|-------|--------|
+| **Setup Time** | 5-10 min | 2-3 min |
+| **Disk Space** | 2-7 GB | 10-15 GB |
+| **Startup Speed** | Fast (~5s) | Medium (~30s) |
+| **Hot Reload** | ✅ Native | ✅ Volume mount |
+| **Jupyter Notebooks** | ✅ Yes | ⚠️ Requires config |
+| **ML Experimentation** | ✅✅✅ Perfect | ⚠️ OK |
+| **Production Deploy** | ❌ No | ✅✅✅ Perfect |
+| **Team Consistency** | ⚠️ Platform-dependent | ✅ Identical |
+| **Database Services** | ⚠️ Manual | ✅ Automatic |
+
+**Our recommendation:** Use Mamba for development, Docker for production!
+
+---
 
 ## Local Development (Without Docker)
 

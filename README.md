@@ -276,20 +276,43 @@ Streaming responses
 Reconnect logic
 
 🛠️ Jak uruchomić projekt?
-1. Klonuj repozytorium
-git clone https://github.com/twoj-nick/LumenAI.git
-cd LumenAI
 
-2. Uruchom Docker Compose
+Wybierz metodę instalacji:
+
+**Metoda A: Mamba/Conda (Deweloperzy ML/AI)** 🐍
+
+# Automatyczna instalacja środowiska
+make mamba-setup
+
+# Aktywuj środowisko
+mamba activate lumenai
+
+# Uruchom backend
+make backend-dev
+
+# Uruchom frontend (osobny terminal)
+make frontend-dev
+
+
+Frontend: http://localhost:3000
+Backend: http://localhost:8000
+
+📖 [Pełna dokumentacja Mamba](./docs/MAMBA_SETUP.md)
+
+**Metoda B: Docker (Produkcja)** 🐳
+
+# Szybki start
+./start.sh
+
+# Lub manualnie
 docker compose up --build
 
-3. Wejdź w przeglądarce
-http://localhost:3000
 
+Frontend: http://localhost:3000
+Backend: http://localhost:8000
+API Docs: http://localhost:8000/docs
 
-Backend jest pod:
-
-http://localhost:8000
+📖 [Szczegóły w Getting Started](./docs/GETTING_STARTED.md)
 
 🧪 Testowanie
 pytest backend/tests/
