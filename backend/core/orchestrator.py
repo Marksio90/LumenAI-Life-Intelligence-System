@@ -1,0 +1,233 @@
+"""
+LumenAI Core Orchestrator
+Central intelligence that routes requests to appropriate agents
+"""
+
+from typing import Dict, List, Optional, Any
+from loguru import logger
+import asyncio
+from datetime import datetime
+
+from backend.core.memory import MemoryManager
+from backend.core.llm_engine import LLMEngine
+from backend.agents.base import BaseAgent
+
+
+class Orchestrator:
+    """
+    The brain of LumenAI - routes user requests to appropriate specialized agents
+    """
+
+    def __init__(self, memory_manager: MemoryManager):
+        self.memory_manager = memory_manager
+        self.llm_engine = LLMEngine()
+        self.agents: Dict[str, BaseAgent] = {}
+        self._initialize_agents()
+
+    def _initialize_agents(self):
+        """Initialize all specialized agents"""
+        logger.info("🧠 Initializing agents...")
+
+        # Import agents dynamically to avoid circular imports
+        try:
+            from backend.agents.cognitive.planner_agent import PlannerAgent
+            from backend.agents.emotional.mood_agent import MoodAgent
+            from backend.agents.cognitive.decision_agent import DecisionAgent
+
+            self.agents = {
+                "planner": PlannerAgent(),
+                "mood": MoodAgent(),
+                "decision": DecisionAgent(),
+                # "vision": VisionAgent(),
+                # "speech": SpeechAgent(),
+                # "finance": FinanceAgent(),
+                # "automation": AutomationAgent(),
+            }
+
+            logger.info(f"✅ Initialized {len(self.agents)} agents: {list(self.agents.keys())}")
+
+        except Exception as e:
+            logger.warning(f"⚠️ Some agents could not be loaded: {e}")
+            # Create fallback agent
+            self.agents = {"general": None}
+
+    async def process_message(
+        self,
+        user_id: str,
+        message: str,
+        message_type: str = "text",
+        metadata: Optional[Dict] = None
+    ) -> Dict[str, Any]:
+        """
+        Main processing pipeline:
+        1. Analyze intent
+        2. Route to appropriate agent(s)
+        3. Generate response
+        4. Update memory
+        """
+        try:
+            logger.info(f"Processing message from {user_id}: {message[:50]}...")
+
+            # Get user context from memory
+            context = await self.memory_manager.get_user_context(user_id)
+
+            # Analyze intent and determine which agent(s) to use
+            intent_analysis = await self._analyze_intent(message, context)
+
+            agent_name = intent_analysis["primary_agent"]
+            confidence = intent_analysis["confidence"]
+
+            logger.info(f"Intent: {agent_name} (confidence: {confidence:.2f})")
+
+            # Route to agent
+            if agent_name in self.agents and self.agents[agent_name]:
+                agent = self.agents[agent_name]
+                response_content = await agent.process(
+                    user_id=user_id,
+                    message=message,
+                    context=context,
+                    metadata=metadata
+                )
+            else:
+                # Fallback to general LLM response
+                response_content = await self._general_response(message, context)
+                agent_name = "general"
+
+            # Store interaction in memory
+            await self.memory_manager.store_interaction(
+                user_id=user_id,
+                message=message,
+                response=response_content,
+                agent=agent_name,
+                metadata=metadata
+            )
+
+            return {
+                "content": response_content,
+                "agent": agent_name,
+                "confidence": confidence,
+                "metadata": {
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "message_type": message_type
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"Error processing message: {e}")
+            return {
+                "content": "Przepraszam, wystąpił błąd. Spróbuj ponownie.",
+                "agent": "error",
+                "error": str(e)
+            }
+
+    async def _analyze_intent(self, message: str, context: Dict) -> Dict[str, Any]:
+        """
+        Analyze user's intent to determine which agent should handle the request
+        Uses LLM to classify intent
+        """
+
+        # Intent classification prompt
+        classification_prompt = f"""
+Analyze the following user message and determine which specialized agent should handle it.
+
+Available agents:
+- planner: Scheduling, calendar, tasks, reminders, time management
+- mood: Emotional support, mental health, feelings, therapy
+- decision: Life decisions, choices, dilemmas, advice
+- finance: Money, budget, expenses, financial planning
+- vision: Image analysis, photo interpretation
+- automation: Actions like sending emails, creating notes
+- general: General conversation, questions not fitting other categories
+
+User message: "{message}"
+
+Recent context: {context.get('recent_summary', 'No recent context')}
+
+Respond with JSON:
+{{
+    "primary_agent": "agent_name",
+    "confidence": 0.95,
+    "reasoning": "brief explanation"
+}}
+"""
+
+        try:
+            result = await self.llm_engine.generate(
+                prompt=classification_prompt,
+                response_format="json"
+            )
+
+            # Parse result
+            import json
+            parsed = json.loads(result)
+
+            return {
+                "primary_agent": parsed.get("primary_agent", "general"),
+                "confidence": parsed.get("confidence", 0.5),
+                "reasoning": parsed.get("reasoning", "")
+            }
+
+        except Exception as e:
+            logger.error(f"Intent analysis error: {e}")
+            # Fallback to keyword-based routing
+            return self._fallback_intent_analysis(message)
+
+    def _fallback_intent_analysis(self, message: str) -> Dict[str, Any]:
+        """Simple keyword-based intent detection as fallback"""
+        message_lower = message.lower()
+
+        keywords = {
+            "planner": ["plan", "kalendarz", "zadanie", "przypomnienie", "spotkanie", "termin"],
+            "mood": ["czuję", "emocje", "smutek", "stres", "niepokój", "radość"],
+            "decision": ["decyzja", "wybór", "czy powinienem", "pomóż zdecydować"],
+            "finance": ["pieniądze", "budżet", "wydatki", "oszczędności", "koszty"],
+        }
+
+        for agent, words in keywords.items():
+            if any(word in message_lower for word in words):
+                return {
+                    "primary_agent": agent,
+                    "confidence": 0.7,
+                    "reasoning": "keyword match"
+                }
+
+        return {
+            "primary_agent": "general",
+            "confidence": 0.5,
+            "reasoning": "no clear match"
+        }
+
+    async def _general_response(self, message: str, context: Dict) -> str:
+        """Generate general response using LLM"""
+
+        system_prompt = """
+Jesteś LumenAI - osobisty asystent życia i cyfrowy mentor.
+
+Twoim zadaniem jest pomagać użytkownikom w codziennych wyzwaniach:
+- Planowanie i organizacja
+- Wsparcie emocjonalne
+- Podejmowanie decyzji
+- Rozwój osobisty
+- Praktyczne porady życiowe
+
+Bądź ciepły, empatyczny, ale konkretny. Pytaj o szczegóły gdy potrzeba.
+Mów po polsku w naturalny, przyjazny sposób.
+"""
+
+        user_prompt = f"Użytkownik: {message}"
+
+        response = await self.llm_engine.generate(
+            prompt=user_prompt,
+            system_prompt=system_prompt,
+            context=context
+        )
+
+        return response
+
+    async def get_agent_status(self) -> Dict[str, Any]:
+        """Get status of all agents"""
+        return {
+            "total_agents": len(self.agents),
+            "active_agents": [name for name, agent in self.agents.items() if agent],
+            "status": "operational"
+        }

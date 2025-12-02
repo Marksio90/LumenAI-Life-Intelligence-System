@@ -1,0 +1,38 @@
+# LumenAI Backend Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    git \
+    tesseract-ocr \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY backend/requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY backend/ ./backend/
+
+# Create necessary directories
+RUN mkdir -p /app/backend/data/vectordb \
+    /app/backend/data/logs \
+    /app/backend/data/users \
+    /app/backend/ml/models
+
+# Expose port
+EXPOSE 8000
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Run the application
+CMD ["uvicorn", "backend.gateway.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

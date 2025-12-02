@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.backend
+    container_name: lumenai-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=${DEBUG:-False}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - MONGODB_URL=mongodb://mongo:27017
+      - REDIS_HOST=redis
+      - CHROMA_HOST=chromadb
+    volumes:
+      - ./backend:/app/backend
+      - backend-data:/app/backend/data
+    depends_on:
+      - mongo
+      - redis
+    networks:
+      - lumenai-network
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.frontend
+    container_name: lumenai-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_WS_URL=ws://localhost:8000
+    depends_on:
+      - backend
+    networks:
+      - lumenai-network
+    restart: unless-stopped
+
+  # MongoDB - User data storage
+  mongo:
+    image: mongo:7.0
+    container_name: lumenai-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - lumenai-network
+    restart: unless-stopped
+
+  # Redis - Caching
+  redis:
+    image: redis:7-alpine
+    container_name: lumenai-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - lumenai-network
+    restart: unless-stopped
+
+  # ChromaDB - Vector database
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: lumenai-chromadb
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+    networks:
+      - lumenai-network
+    restart: unless-stopped
+
+volumes:
+  backend-data:
+  mongo-data:
+  redis-data:
+  chroma-data:
+
+networks:
+  lumenai-network:
+    driver: bridge
