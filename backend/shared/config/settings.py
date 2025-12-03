@@ -34,7 +34,18 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = Field(default=None, env="OPENAI_API_KEY")
     ANTHROPIC_API_KEY: Optional[str] = Field(default=None, env="ANTHROPIC_API_KEY")
     DEFAULT_LLM_PROVIDER: str = Field(default="openai", env="DEFAULT_LLM_PROVIDER")
-    DEFAULT_MODEL: str = Field(default="gpt-4-turbo-preview", env="DEFAULT_MODEL")
+
+    # Model Selection - Use CHEAP models by default!
+    DEFAULT_MODEL: str = Field(default="gpt-4o-mini", env="DEFAULT_MODEL")  # 75x cheaper!
+    SMART_MODEL: str = Field(default="gpt-4o", env="SMART_MODEL")  # For complex tasks
+    FAST_MODEL: str = Field(default="gpt-3.5-turbo", env="FAST_MODEL")  # Ultra fast
+
+    # Cost Control
+    ENABLE_SMART_ROUTING: bool = Field(default=True, env="ENABLE_SMART_ROUTING")  # Auto-select model
+    MAX_TOKENS_DEFAULT: int = Field(default=1000, env="MAX_TOKENS_DEFAULT")
+    MAX_TOKENS_SMART: int = Field(default=2000, env="MAX_TOKENS_SMART")
+    ENABLE_RESPONSE_CACHE: bool = Field(default=True, env="ENABLE_RESPONSE_CACHE")
+    CACHE_TTL_SECONDS: int = Field(default=3600, env="CACHE_TTL_SECONDS")  # 1 hour
 
     # Vector Database
     CHROMA_HOST: str = Field(default="localhost", env="CHROMA_HOST")
