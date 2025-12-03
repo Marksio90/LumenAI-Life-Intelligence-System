@@ -16,7 +16,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 import logging
 
-from models.database import (
+from backend.models.database import (
     User, Conversation, Message, MoodEntry, UserContext,
     model_to_dict
 )
@@ -66,10 +66,14 @@ class MongoDBService:
         """
         try:
             logger.info(f"Łączenie z MongoDB: {self.connection_string}")
-            self.client = AsyncIOMotorClient(self.connection_string)
+            # Add timeout to prevent hanging
+            self.client = AsyncIOMotorClient(
+                self.connection_string,
+                serverSelectionTimeoutMS=3000  # 3 second timeout
+            )
             self.db = self.client[self.database_name]
 
-            # Test połączenia
+            # Test połączenia with timeout
             await self.client.admin.command('ping')
             logger.info(f"✅ Połączono z MongoDB! Baza: {self.database_name}")
 
