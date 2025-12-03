@@ -106,7 +106,7 @@ class MemoryManager:
         context = {
             "user_id": user_id,
             "recent_messages": await self._get_recent_messages(user_id, limit=10),
-            "user_profile": self.user_profiles.get(user_id, {}),
+            "user_profile": await self._get_user_profile(user_id),
             "recent_summary": await self._generate_recent_summary(user_id),
             "preferences": await self._get_user_preferences(user_id),
             "_cached_at": datetime.utcnow()
@@ -153,6 +153,23 @@ class MemoryManager:
         if topics:
             return f"Recent topics: {', '.join(set(topics))}"
         return "General conversation"
+
+    async def _get_user_profile(self, user_id: str) -> Dict:
+        """Get user profile information (from MongoDB)"""
+        db = self._get_db()
+        if not db:
+            return {}
+
+        user = await db.get_user(user_id)
+        if user and user.profile:
+            return {
+                "name": user.profile.name,
+                "age": user.profile.age,
+                "timezone": user.profile.timezone,
+                "interests": user.profile.interests,
+                "goals": user.profile.goals
+            }
+        return {}
 
     async def _get_user_preferences(self, user_id: str) -> Dict:
         """Get user preferences and settings (from MongoDB)"""
