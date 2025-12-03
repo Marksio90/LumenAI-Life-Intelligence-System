@@ -3,13 +3,14 @@ LumenAI Gateway - Main FastAPI Application
 WebSocket-enabled real-time AI assistant gateway
 """
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from loguru import logger
 import sys
-from typing import Dict, List
+from typing import Dict, List, Optional
+import base64
 
 # Add parent directory to path
 sys.path.append('..')
@@ -862,6 +863,206 @@ async def analytics_health():
             "status": "error",
             "message": str(e)
         }
+
+
+# ============================================================================
+# FILE UPLOAD - Image and Audio Processing
+# ============================================================================
+
+@app.post("/api/v1/upload/image")
+async def upload_image(
+    user_id: str = Form(...),
+    message: str = Form(""),
+    file: UploadFile = File(...)
+):
+    """
+    Upload and process image with Vision Agent.
+
+    Supports OCR, object detection, scene description.
+
+    Example:
+        POST /api/v1/upload/image
+        Form data:
+            - user_id: "user_123"
+            - message: "Co jest na tym zdjęciu?"
+            - file: image.jpg
+
+    Response:
+        {
+            "status": "success",
+            "response": "🔍 **Analiza obrazu:**\n\n...",
+            "agent": "Vision"
+        }
+    """
+    try:
+        # Validate file type
+        content_type = file.content_type
+        if not content_type or not content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="File must be an image")
+
+        # Read image data
+        image_bytes = await file.read()
+        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+
+        # Add data URL prefix
+        mime_type = content_type
+        image_data = f"data:{mime_type};base64,{image_base64}"
+
+        # Process with orchestrator
+        response = await orchestrator.process_message(
+            user_id=user_id,
+            message=message or "Przeanalizuj to zdjęcie",
+            message_type="image",
+            metadata={
+                "image": image_data,
+                "filename": file.filename,
+                "content_type": content_type
+            }
+        )
+
+        return {
+            "status": "success",
+            "response": response["content"],
+            "agent": response.get("agent", "unknown"),
+            "metadata": response.get("metadata", {})
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Image upload failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/upload/audio")
+async def upload_audio(
+    user_id: str = Form(...),
+    message: str = Form(""),
+    language: str = Form("pl"),
+    file: UploadFile = File(...)
+):
+    """
+    Upload and transcribe audio with Speech Agent.
+
+    Supports multiple audio formats (mp3, wav, m4a, webm, etc.)
+
+    Example:
+        POST /api/v1/upload/audio
+        Form data:
+            - user_id: "user_123"
+            - message: "Przetranskrybuj to nagranie"
+            - language: "pl"
+            - file: recording.mp3
+
+    Response:
+        {
+            "status": "success",
+            "response": "🎤 **Transkrypcja:**\n\n...",
+            "agent": "Speech",
+            "transcription": "..."
+        }
+    """
+    try:
+        # Validate file type
+        content_type = file.content_type
+        if not content_type or not content_type.startswith('audio/'):
+            # Also accept video formats (some browsers send audio as video/webm)
+            if not content_type.startswith('video/'):
+                raise HTTPException(status_code=400, detail="File must be audio")
+
+        # Read audio data
+        audio_bytes = await file.read()
+        audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+
+        # Get file extension
+        filename = file.filename or "audio.mp3"
+        audio_format = filename.split('.')[-1].lower()
+
+        # Process with orchestrator
+        response = await orchestrator.process_message(
+            user_id=user_id,
+            message=message or "Transkrybuj to nagranie",
+            message_type="audio",
+            metadata={
+                "audio": audio_base64,
+                "audio_format": audio_format,
+                "filename": filename,
+                "language": language,
+                "content_type": content_type
+            }
+        )
+
+        return {
+            "status": "success",
+            "response": response["content"],
+            "agent": response.get("agent", "unknown"),
+            "metadata": response.get("metadata", {})
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Audio upload failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/tts")
+async def text_to_speech(
+    user_id: str,
+    text: str,
+    voice: str = "alloy",
+    model: str = "tts-1"
+):
+    """
+    Convert text to speech using OpenAI TTS.
+
+    Available voices: alloy, echo, fable, onyx, nova, shimmer
+    Models: tts-1 (fast), tts-1-hd (high quality)
+
+    Example:
+        POST /api/v1/tts
+        Body: {
+            "user_id": "user_123",
+            "text": "Witaj w LumenAI!",
+            "voice": "alloy",
+            "model": "tts-1"
+        }
+
+    Response:
+        {
+            "status": "success",
+            "audio_base64": "...",
+            "audio_format": "mp3",
+            "voice": "alloy"
+        }
+    """
+    try:
+        # Process with orchestrator (Speech Agent will handle TTS)
+        response = await orchestrator.process_message(
+            user_id=user_id,
+            message=f"Przeczytaj: {text}",
+            message_type="tts",
+            metadata={
+                "voice": voice,
+                "tts_model": model
+            }
+        )
+
+        # Check if response contains audio
+        if isinstance(response.get("content"), dict) and "audio_base64" in response["content"]:
+            return {
+                "status": "success",
+                **response["content"]
+            }
+
+        return {
+            "status": "success",
+            "message": response.get("content", "TTS generation completed")
+        }
+
+    except Exception as e:
+        logger.error(f"TTS failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================================

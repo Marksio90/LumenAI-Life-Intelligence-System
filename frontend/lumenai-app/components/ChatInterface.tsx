@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Send, Mic, Image as ImageIcon, Loader2 } from 'lucide-react'
+import { Send, Mic, Image as ImageIcon, Loader2, X } from 'lucide-react'
 import { useChatStore } from '@/lib/store'
 import MessageBubble from './MessageBubble'
 import TypingIndicator from './TypingIndicator'
@@ -9,9 +9,23 @@ import TypingIndicator from './TypingIndicator'
 export default function ChatInterface() {
   const [input, setInput] = useState('')
   const [isRecording, setIsRecording] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null)
+  const [audioChunks, setAudioChunks] = useState<Blob[]>([])
 
-  const { messages, isTyping, sendMessage, connectWebSocket } = useChatStore()
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const { messages, isTyping, sendMessage, connectWebSocket, userId, addMessage } = useChatStore(state => ({
+    messages: state.messages,
+    isTyping: state.isTyping,
+    sendMessage: state.sendMessage,
+    connectWebSocket: state.connectWebSocket,
+    userId: state.userId,
+    addMessage: state.addMessage
+  }))
 
   useEffect(() => {
     // Connect to WebSocket on mount
@@ -37,15 +51,166 @@ export default function ChatInterface() {
     }
   }
 
-  const handleVoiceInput = () => {
-    setIsRecording(!isRecording)
-    // TODO: Implement voice recording
-    alert('Funkcja rozpoznawania mowy będzie wkrótce dostępna!')
+  const handleVoiceInput = async () => {
+    if (!isRecording) {
+      // Start recording
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        const recorder = new MediaRecorder(stream)
+        const chunks: Blob[] = []
+
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) {
+            chunks.push(e.data)
+          }
+        }
+
+        recorder.onstop = async () => {
+          const audioBlob = new Blob(chunks, { type: 'audio/webm' })
+          await uploadAudio(audioBlob)
+
+          // Stop all tracks
+          stream.getTracks().forEach(track => track.stop())
+        }
+
+        recorder.start()
+        setMediaRecorder(recorder)
+        setIsRecording(true)
+        setAudioChunks(chunks)
+      } catch (err) {
+        console.error('Error accessing microphone:', err)
+        alert('Nie mogę uzyskać dostępu do mikrofonu. Sprawdź uprawnienia przeglądarki.')
+      }
+    } else {
+      // Stop recording
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop()
+        setIsRecording(false)
+      }
+    }
+  }
+
+  const uploadAudio = async (audioBlob: Blob) => {
+    setIsUploading(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', audioBlob, 'recording.webm')
+      formData.append('user_id', userId)
+      formData.append('message', input || 'Transkrybuj to nagranie')
+      formData.append('language', 'pl')
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${apiUrl}/api/v1/upload/audio`, {
+        method: 'POST',
+        body: formData
+      })
+
+      const data = await response.json()
+
+      if (data.status === 'success') {
+        // Add user message
+        addMessage({
+          id: `msg_${Date.now()}`,
+          role: 'user',
+          content: input || '🎤 Nagranie audio',
+          timestamp: new Date()
+        })
+
+        // Add assistant response
+        addMessage({
+          id: `msg_${Date.now() + 1}`,
+          role: 'assistant',
+          content: data.response,
+          timestamp: new Date(),
+          agent: data.agent
+        })
+
+        setInput('')
+      } else {
+        alert('Błąd podczas przetwarzania audio')
+      }
+    } catch (err) {
+      console.error('Error uploading audio:', err)
+      alert('Wystąpił błąd podczas przesyłania nagrania')
+    } finally {
+      setIsUploading(false)
+    }
   }
 
   const handleImageUpload = () => {
-    // TODO: Implement image upload
-    alert('Funkcja przesyłania obrazów będzie wkrótce dostępna!')
+    fileInputRef.current?.click()
+  }
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file && file.type.startsWith('image/')) {
+      setSelectedImage(file)
+
+      // Create preview
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleSendImage = async () => {
+    if (!selectedImage) return
+
+    setIsUploading(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', selectedImage)
+      formData.append('user_id', userId)
+      formData.append('message', input || 'Co jest na tym zdjęciu?')
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${apiUrl}/api/v1/upload/image`, {
+        method: 'POST',
+        body: formData
+      })
+
+      const data = await response.json()
+
+      if (data.status === 'success') {
+        // Add user message with image indicator
+        addMessage({
+          id: `msg_${Date.now()}`,
+          role: 'user',
+          content: `📷 ${input || 'Przesłano obraz'}`,
+          timestamp: new Date()
+        })
+
+        // Add assistant response
+        addMessage({
+          id: `msg_${Date.now() + 1}`,
+          role: 'assistant',
+          content: data.response,
+          timestamp: new Date(),
+          agent: data.agent
+        })
+
+        // Clear input and image
+        setInput('')
+        setSelectedImage(null)
+        setImagePreview(null)
+      } else {
+        alert('Błąd podczas przetwarzania obrazu')
+      }
+    } catch (err) {
+      console.error('Error uploading image:', err)
+      alert('Wystąpił błąd podczas przesyłania obrazu')
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const cancelImageUpload = () => {
+    setSelectedImage(null)
+    setImagePreview(null)
   }
 
   return (
@@ -86,16 +251,52 @@ export default function ChatInterface() {
 
       {/* Input Area */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-4 border border-gray-200 dark:border-slate-700">
+        {/* Image Preview */}
+        {imagePreview && (
+          <div className="mb-3 relative">
+            <div className="relative inline-block">
+              <img
+                src={imagePreview}
+                alt="Preview"
+                className="max-h-32 rounded-lg border border-gray-300 dark:border-gray-600"
+              />
+              <button
+                onClick={cancelImageUpload}
+                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Recording Indicator */}
+        {isRecording && (
+          <div className="mb-3 flex items-center gap-2 text-red-500">
+            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+            <span className="text-sm font-medium">Nagrywanie...</span>
+          </div>
+        )}
+
+        {/* Uploading Indicator */}
+        {isUploading && (
+          <div className="mb-3 flex items-center gap-2 text-purple-500">
+            <Loader2 className="animate-spin" size={16} />
+            <span className="text-sm font-medium">Przesyłanie...</span>
+          </div>
+        )}
+
         <div className="flex items-end gap-2">
           {/* Voice Input */}
           <button
             onClick={handleVoiceInput}
+            disabled={isUploading}
             className={`p-3 rounded-xl transition-all ${
               isRecording
                 ? 'bg-red-500 text-white animate-pulse'
-                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600 disabled:opacity-50'
             }`}
-            title="Nagrywanie głosowe"
+            title={isRecording ? 'Zatrzymaj nagrywanie' : 'Nagrywanie głosowe'}
           >
             <Mic size={20} />
           </button>
@@ -103,11 +304,21 @@ export default function ChatInterface() {
           {/* Image Upload */}
           <button
             onClick={handleImageUpload}
-            className="p-3 rounded-xl bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all"
+            disabled={isUploading || isRecording}
+            className="p-3 rounded-xl bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all disabled:opacity-50"
             title="Prześlij obraz"
           >
             <ImageIcon size={20} />
           </button>
+
+          {/* Hidden File Input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleImageSelect}
+            className="hidden"
+          />
 
           {/* Text Input */}
           <textarea
@@ -115,7 +326,8 @@ export default function ChatInterface() {
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Napisz wiadomość..."
-            className="flex-1 resize-none bg-transparent border-none outline-none px-4 py-3 text-gray-800 dark:text-gray-200 placeholder-gray-400 max-h-32"
+            disabled={isUploading}
+            className="flex-1 resize-none bg-transparent border-none outline-none px-4 py-3 text-gray-800 dark:text-gray-200 placeholder-gray-400 max-h-32 disabled:opacity-50"
             rows={1}
             style={{
               minHeight: '44px',
@@ -125,11 +337,11 @@ export default function ChatInterface() {
 
           {/* Send Button */}
           <button
-            onClick={handleSend}
-            disabled={!input.trim()}
+            onClick={selectedImage ? handleSendImage : handleSend}
+            disabled={(!input.trim() && !selectedImage) || isUploading}
             className="p-3 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
-            <Send size={20} />
+            {isUploading ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
           </button>
         </div>
       </div>

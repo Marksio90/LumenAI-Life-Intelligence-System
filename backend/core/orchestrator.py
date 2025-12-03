@@ -33,13 +33,15 @@ class Orchestrator:
             from backend.agents.cognitive.planner_agent import PlannerAgent
             from backend.agents.emotional.mood_agent import MoodAgent
             from backend.agents.cognitive.decision_agent import DecisionAgent
+            from backend.agents.vision.vision_agent import VisionAgent
+            from backend.agents.speech.speech_agent import SpeechAgent
 
             self.agents = {
                 "planner": PlannerAgent(memory_manager=self.memory_manager),
                 "mood": MoodAgent(memory_manager=self.memory_manager),
                 "decision": DecisionAgent(memory_manager=self.memory_manager),
-                # "vision": VisionAgent(),
-                # "speech": SpeechAgent(),
+                "vision": VisionAgent(memory_manager=self.memory_manager),
+                "speech": SpeechAgent(memory_manager=self.memory_manager),
                 # "finance": FinanceAgent(),
                 # "automation": AutomationAgent(),
             }
@@ -71,11 +73,20 @@ class Orchestrator:
             # Get user context from memory
             context = await self.memory_manager.get_user_context(user_id)
 
-            # Analyze intent and determine which agent(s) to use
-            intent_analysis = await self._analyze_intent(message, context)
-
-            agent_name = intent_analysis["primary_agent"]
-            confidence = intent_analysis["confidence"]
+            # Check if message type explicitly indicates agent
+            if message_type == "image":
+                agent_name = "vision"
+                confidence = 1.0
+                context["has_image"] = True
+            elif message_type == "audio" or message_type == "tts":
+                agent_name = "speech"
+                confidence = 1.0
+                context["has_audio"] = True
+            else:
+                # Analyze intent and determine which agent(s) to use
+                intent_analysis = await self._analyze_intent(message, context, metadata)
+                agent_name = intent_analysis["primary_agent"]
+                confidence = intent_analysis["confidence"]
 
             logger.info(f"Intent: {agent_name} (confidence: {confidence:.2f})")
 
@@ -120,11 +131,18 @@ class Orchestrator:
                 "error": str(e)
             }
 
-    async def _analyze_intent(self, message: str, context: Dict) -> Dict[str, Any]:
+    async def _analyze_intent(self, message: str, context: Dict, metadata: Optional[Dict] = None) -> Dict[str, Any]:
         """
         Analyze user's intent to determine which agent should handle the request
         Uses LLM to classify intent
         """
+
+        # Check metadata for hints
+        if metadata:
+            if metadata.get("image"):
+                return {"primary_agent": "vision", "confidence": 1.0, "reasoning": "image provided"}
+            if metadata.get("audio"):
+                return {"primary_agent": "speech", "confidence": 1.0, "reasoning": "audio provided"}
 
         # Intent classification prompt
         classification_prompt = f"""
@@ -135,7 +153,8 @@ Available agents:
 - mood: Emotional support, mental health, feelings, therapy
 - decision: Life decisions, choices, dilemmas, advice
 - finance: Money, budget, expenses, financial planning
-- vision: Image analysis, photo interpretation
+- vision: Image analysis, photo interpretation, OCR
+- speech: Audio transcription, voice commands, text-to-speech
 - automation: Actions like sending emails, creating notes
 - general: General conversation, questions not fitting other categories
 
@@ -181,6 +200,8 @@ Respond with JSON:
             "mood": ["czuję", "emocje", "smutek", "stres", "niepokój", "radość"],
             "decision": ["decyzja", "wybór", "czy powinienem", "pomóż zdecydować"],
             "finance": ["pieniądze", "budżet", "wydatki", "oszczędności", "koszty"],
+            "vision": ["obraz", "zdjęcie", "foto", "co widzisz", "przeczytaj tekst", "ocr"],
+            "speech": ["nagraj", "przeczytaj", "powiedz", "transkrypcja", "audio"],
         }
 
         for agent, words in keywords.items():
