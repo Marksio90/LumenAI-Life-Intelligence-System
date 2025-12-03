@@ -5,6 +5,7 @@ import { useChatStore } from '@/lib/store'
 import { LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { TrendingUp, TrendingDown, Minus, MessageSquare, Sparkles, DollarSign, Heart } from 'lucide-react'
 import Link from 'next/link'
+import DashboardSkeleton from '@/components/DashboardSkeleton'
 
 interface DashboardStats {
   total_conversations: number
@@ -68,14 +69,7 @@ export default function DashboardPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Ładowanie dashboardu...</p>
-        </div>
-      </div>
-    )
+    return <DashboardSkeleton />
   }
 
   const getTrendIcon = (trend: string) => {
