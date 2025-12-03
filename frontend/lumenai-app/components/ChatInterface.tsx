@@ -228,11 +228,14 @@ export default function ChatInterface() {
             <p className="text-gray-600 dark:text-gray-400 max-w-md mb-8">
               Jestem Twoim osobistym asystentem życia. Mogę pomóc Ci w:
             </p>
-            <div className="grid grid-cols-2 gap-4 max-w-2xl">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-w-4xl">
               <FeatureCard icon="📅" title="Planowaniu" desc="Organizacja dnia i zadań" />
               <FeatureCard icon="💭" title="Emocjach" desc="Wsparcie psychiczne" />
               <FeatureCard icon="🤔" title="Decyzjach" desc="Pomoc w wyborach" />
               <FeatureCard icon="💰" title="Finansach" desc="Zarządzanie budżetem" />
+              <FeatureCard icon="👁️" title="Analizie Obrazów" desc="OCR, rozpoznawanie obiektów" />
+              <FeatureCard icon="🎤" title="Mowie i Audio" desc="Transkrypcja, synteza mowy" />
+              <FeatureCard icon="🤖" title="Automatyzacji" desc="Email, kalendarz, integracje" />
             </div>
             <p className="mt-8 text-sm text-gray-500">
               Zacznij rozmowę - powiedz mi, w czym mogę Ci dziś pomóc!
