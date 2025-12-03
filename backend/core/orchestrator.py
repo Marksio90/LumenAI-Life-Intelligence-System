@@ -35,9 +35,9 @@ class Orchestrator:
             from backend.agents.cognitive.decision_agent import DecisionAgent
 
             self.agents = {
-                "planner": PlannerAgent(),
-                "mood": MoodAgent(),
-                "decision": DecisionAgent(),
+                "planner": PlannerAgent(memory_manager=self.memory_manager),
+                "mood": MoodAgent(memory_manager=self.memory_manager),
+                "decision": DecisionAgent(memory_manager=self.memory_manager),
                 # "vision": VisionAgent(),
                 # "speech": SpeechAgent(),
                 # "finance": FinanceAgent(),

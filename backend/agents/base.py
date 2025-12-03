@@ -13,9 +13,10 @@ class BaseAgent(ABC):
     Abstract base class for all LumenAI agents
     """
 
-    def __init__(self, name: str, description: str):
+    def __init__(self, name: str, description: str, memory_manager=None):
         self.name = name
         self.description = description
+        self.memory_manager = memory_manager  # Optional: allows agents to access memory
         logger.info(f"🤖 Agent '{name}' initialized")
 
     @abstractmethod

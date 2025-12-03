@@ -18,10 +18,11 @@ class DecisionAgent(BaseAgent):
     - Life advice
     """
 
-    def __init__(self):
+    def __init__(self, memory_manager=None):
         super().__init__(
             name="Decision",
-            description="Pomoc w podejmowaniu decyzji i wyborów życiowych"
+            description="Pomoc w podejmowaniu decyzji i wyborów życiowych",
+            memory_manager=memory_manager
         )
 
     async def process(

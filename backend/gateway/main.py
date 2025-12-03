@@ -17,6 +17,7 @@ sys.path.append('..')
 from backend.shared.config.settings import settings
 from backend.core.orchestrator import Orchestrator
 from backend.core.memory import MemoryManager
+from backend.services.mongodb_service import init_mongodb_service, get_mongodb_service
 
 
 # Connection Manager for WebSocket
@@ -49,14 +50,27 @@ class ConnectionManager:
 manager = ConnectionManager()
 orchestrator = None
 memory_manager = None
+mongodb_service = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    global orchestrator, memory_manager
+    global orchestrator, memory_manager, mongodb_service
 
     logger.info("🚀 Starting LumenAI...")
+
+    # Initialize MongoDB
+    try:
+        mongodb_service = init_mongodb_service(
+            connection_string=settings.MONGODB_URL,
+            database_name=settings.MONGODB_DB_NAME
+        )
+        await mongodb_service.connect()
+        logger.info("✅ MongoDB connected")
+    except Exception as e:
+        logger.warning(f"⚠️  MongoDB connection failed: {e}. Running without persistence.")
+        mongodb_service = None
 
     # Initialize core systems
     memory_manager = MemoryManager()
@@ -68,6 +82,9 @@ async def lifespan(app: FastAPI):
 
     # Cleanup
     logger.info("🛑 Shutting down LumenAI...")
+    if mongodb_service:
+        await mongodb_service.disconnect()
+        logger.info("✅ MongoDB disconnected")
 
 
 # Create FastAPI app
@@ -229,6 +246,150 @@ async def get_cost_stats():
     except Exception as e:
         logger.error(f"Error fetching cost stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# NEW: MongoDB-powered endpoints
+# ============================================================================
+
+@app.get("/api/v1/user/{user_id}/conversations")
+async def get_user_conversations(user_id: str, limit: int = 20, skip: int = 0):
+    """
+    Get user's conversations with MongoDB persistence
+
+    NEW FEATURE: Conversations now persist across restarts! 🎉
+    """
+    try:
+        db = get_mongodb_service()
+        conversations = await db.get_user_conversations(user_id, limit=limit, skip=skip)
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "total": len(conversations),
+            "conversations": [
+                {
+                    "conversation_id": conv.conversation_id,
+                    "title": conv.title,
+                    "started_at": conv.started_at.isoformat(),
+                    "last_message_at": conv.last_message_at.isoformat(),
+                    "message_count": conv.message_count,
+                    "agents_used": conv.agents_used,
+                    "status": conv.status
+                }
+                for conv in conversations
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error fetching conversations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/conversation/{conversation_id}/messages")
+async def get_conversation_messages(conversation_id: str, limit: int = 100):
+    """
+    Get all messages from a conversation
+
+    NEW FEATURE: Full conversation history from MongoDB! 💬
+    """
+    try:
+        db = get_mongodb_service()
+        messages = await db.get_conversation_messages(conversation_id, limit=limit)
+
+        return {
+            "status": "success",
+            "conversation_id": conversation_id,
+            "total": len(messages),
+            "messages": [
+                {
+                    "message_id": msg.message_id,
+                    "role": msg.role,
+                    "content": msg.content,
+                    "agent": msg.agent,
+                    "timestamp": msg.timestamp.isoformat(),
+                    "metadata": {
+                        "tokens": msg.metadata.tokens,
+                        "cost": msg.metadata.cost,
+                        "model": msg.metadata.model
+                    }
+                }
+                for msg in messages
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error fetching messages: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/user/{user_id}/mood/history")
+async def get_mood_history(user_id: str, days: int = 7):
+    """
+    Get user's mood history
+
+    NEW FEATURE: Mood tracking with MongoDB! 😊
+    """
+    try:
+        mood_history = await memory_manager.get_mood_history(user_id, days=days)
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "days": days,
+            "total_entries": len(mood_history),
+            "entries": mood_history
+        }
+    except Exception as e:
+        logger.error(f"Error fetching mood history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/user/{user_id}/mood/stats")
+async def get_mood_stats(user_id: str, days: int = 30):
+    """
+    Get mood statistics and insights
+
+    NEW FEATURE: Analyze mood patterns! 📊
+    """
+    try:
+        stats = await memory_manager.get_mood_statistics(user_id, days=days)
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "period_days": days,
+            "statistics": stats
+        }
+    except Exception as e:
+        logger.error(f"Error fetching mood stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/db/health")
+async def database_health():
+    """Check MongoDB connection status"""
+    try:
+        db = get_mongodb_service()
+        is_healthy = await db.health_check()
+
+        if is_healthy:
+            stats = await db.get_database_stats()
+            return {
+                "status": "healthy",
+                "database": stats.get("database"),
+                "collections": stats.get("collections"),
+                "total_documents": stats.get("objects")
+            }
+        else:
+            return {
+                "status": "unhealthy",
+                "message": "MongoDB connection failed"
+            }
+    except Exception as e:
+        logger.error(f"Database health check failed: {e}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
 
 if __name__ == "__main__":
