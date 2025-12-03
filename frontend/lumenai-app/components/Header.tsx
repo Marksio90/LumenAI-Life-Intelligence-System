@@ -1,12 +1,16 @@
 'use client'
 
-import { Menu, Sparkles } from 'lucide-react'
+import { Menu, Sparkles, BarChart3 } from 'lucide-react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 
 interface HeaderProps {
   onMenuClick: () => void
 }
 
 export default function Header({ onMenuClick }: HeaderProps) {
+  const pathname = usePathname()
+
   return (
     <header className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-6 py-4">
       <div className="flex items-center justify-between">
@@ -29,6 +33,31 @@ export default function Header({ onMenuClick }: HeaderProps) {
             </div>
           </div>
         </div>
+
+        {/* Center: Navigation */}
+        <nav className="hidden md:flex items-center gap-2">
+          <Link
+            href="/"
+            className={`px-4 py-2 rounded-lg transition-all ${
+              pathname === '/'
+                ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            💬 Chat
+          </Link>
+          <Link
+            href="/dashboard"
+            className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
+              pathname === '/dashboard'
+                ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <BarChart3 size={18} />
+            Dashboard
+          </Link>
+        </nav>
 
         {/* Right: Status */}
         <div className="flex items-center gap-2">

@@ -1243,6 +1243,221 @@ async def set_budget(user_id: str, monthly_amount: float):
 
 
 # ============================================================================
+# DASHBOARD - Analytics and Visualization Data
+# ============================================================================
+
+@app.get("/api/v1/dashboard/stats/{user_id}")
+async def get_dashboard_stats(user_id: str):
+    """
+    Get overall dashboard statistics for user.
+
+    Returns key metrics for dashboard overview.
+
+    Example:
+        GET /api/v1/dashboard/stats/user_123
+
+    Response:
+        {
+            "status": "success",
+            "stats": {
+                "total_conversations": 45,
+                "total_messages": 342,
+                "current_mood": "happy",
+                "mood_trend": "improving",
+                "total_expenses": 2340.50,
+                "budget_used_percent": 78
+            }
+        }
+    """
+    try:
+        db = get_mongodb_service()
+
+        # Get conversation count
+        conversations = await db.get_user_conversations(user_id, limit=1000)
+        total_conversations = len(conversations)
+
+        # Calculate total messages
+        total_messages = sum(conv.message_count for conv in conversations)
+
+        # Get mood stats
+        mood_stats = await memory_manager.get_mood_statistics(user_id, days=7) if memory_manager else {}
+
+        stats = {
+            "total_conversations": total_conversations,
+            "total_messages": total_messages,
+            "active_agents": 7,
+            "current_mood": mood_stats.get("average_mood", "neutral"),
+            "mood_trend": mood_stats.get("trend", "stable"),
+            "total_expenses": 0.0,  # Would be calculated from expenses
+            "budget_used_percent": 0,
+            "messages_this_week": total_messages,  # Simplified
+        }
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "stats": stats
+        }
+
+    except Exception as e:
+        logger.error(f"Get dashboard stats failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/dashboard/expenses-chart/{user_id}")
+async def get_expenses_chart_data(user_id: str, days: int = 30):
+    """
+    Get expense data formatted for charts.
+
+    Returns both timeline data and category breakdown.
+
+    Example:
+        GET /api/v1/dashboard/expenses-chart/user_123?days=30
+
+    Response:
+        {
+            "status": "success",
+            "timeline": [
+                {"date": "2025-12-01", "amount": 120.5},
+                {"date": "2025-12-02", "amount": 85.0},
+                ...
+            ],
+            "by_category": [
+                {"category": "jedzenie", "amount": 450.0, "percentage": 35},
+                {"category": "transport", "amount": 280.0, "percentage": 22},
+                ...
+            ],
+            "total": 1280.0
+        }
+    """
+    try:
+        # In production, fetch from expenses collection
+        # For now, return sample data structure
+
+        from datetime import datetime, timedelta
+
+        # Generate sample timeline data
+        timeline = []
+        base_date = datetime.now() - timedelta(days=days)
+        for i in range(days):
+            date = base_date + timedelta(days=i)
+            timeline.append({
+                "date": date.strftime("%Y-%m-%d"),
+                "amount": 0.0  # Would be actual expenses
+            })
+
+        # Sample category data
+        by_category = [
+            {"category": "jedzenie", "amount": 0.0, "percentage": 0, "color": "#10b981"},
+            {"category": "transport", "amount": 0.0, "percentage": 0, "color": "#3b82f6"},
+            {"category": "dom", "amount": 0.0, "percentage": 0, "color": "#8b5cf6"},
+            {"category": "rozrywka", "amount": 0.0, "percentage": 0, "color": "#f59e0b"},
+            {"category": "zdrowie", "amount": 0.0, "percentage": 0, "color": "#ef4444"},
+            {"category": "ubrania", "amount": 0.0, "percentage": 0, "color": "#ec4899"},
+            {"category": "edukacja", "amount": 0.0, "percentage": 0, "color": "#14b8a6"},
+            {"category": "inne", "amount": 0.0, "percentage": 0, "color": "#6b7280"},
+        ]
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "period_days": days,
+            "timeline": timeline,
+            "by_category": by_category,
+            "total": 0.0,
+            "message": "Zacznij dodawać wydatki, aby zobaczyć wykresy!"
+        }
+
+    except Exception as e:
+        logger.error(f"Get expenses chart failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/dashboard/mood-chart/{user_id}")
+async def get_mood_chart_data(user_id: str, days: int = 30):
+    """
+    Get mood data formatted for timeline chart.
+
+    Example:
+        GET /api/v1/dashboard/mood-chart/user_123?days=30
+
+    Response:
+        {
+            "status": "success",
+            "data": [
+                {
+                    "date": "2025-12-01",
+                    "mood": "happy",
+                    "intensity": 7,
+                    "activities": ["work", "exercise"]
+                },
+                ...
+            ],
+            "average_intensity": 6.5,
+            "most_common_mood": "happy",
+            "trend": "improving"
+        }
+    """
+    try:
+        # Get mood history from memory manager
+        mood_history = []
+        if memory_manager:
+            mood_history = await memory_manager.get_mood_history(user_id, days=days)
+
+        # Format for chart
+        chart_data = []
+        total_intensity = 0
+        mood_counts = {}
+
+        for entry in mood_history:
+            intensity = entry.get("intensity", 5)
+            mood = entry.get("mood", "neutral")
+
+            chart_data.append({
+                "date": entry.get("date", ""),
+                "mood": mood,
+                "intensity": intensity,
+                "trigger": entry.get("trigger", ""),
+            })
+
+            total_intensity += intensity
+            mood_counts[mood] = mood_counts.get(mood, 0) + 1
+
+        # Calculate stats
+        avg_intensity = total_intensity / len(chart_data) if chart_data else 5.0
+        most_common_mood = max(mood_counts.items(), key=lambda x: x[1])[0] if mood_counts else "neutral"
+
+        # Simple trend calculation
+        if len(chart_data) >= 2:
+            first_half_avg = sum(d["intensity"] for d in chart_data[:len(chart_data)//2]) / (len(chart_data)//2)
+            second_half_avg = sum(d["intensity"] for d in chart_data[len(chart_data)//2:]) / (len(chart_data) - len(chart_data)//2)
+
+            if second_half_avg > first_half_avg + 0.5:
+                trend = "improving"
+            elif second_half_avg < first_half_avg - 0.5:
+                trend = "declining"
+            else:
+                trend = "stable"
+        else:
+            trend = "insufficient_data"
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "period_days": days,
+            "data": chart_data,
+            "average_intensity": round(avg_intensity, 1),
+            "most_common_mood": most_common_mood,
+            "trend": trend,
+            "total_entries": len(chart_data)
+        }
+
+    except Exception as e:
+        logger.error(f"Get mood chart failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # MACHINE LEARNING - Personalized ML Models
 # ============================================================================
 
