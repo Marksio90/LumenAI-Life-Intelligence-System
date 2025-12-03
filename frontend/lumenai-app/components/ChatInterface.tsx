@@ -18,13 +18,14 @@ export default function ChatInterface() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { messages, isTyping, sendMessage, connectWebSocket, userId, addMessage } = useChatStore(state => ({
+  const { messages, isTyping, sendMessage, connectWebSocket, userId, addMessage, addToast } = useChatStore(state => ({
     messages: state.messages,
     isTyping: state.isTyping,
     sendMessage: state.sendMessage,
     connectWebSocket: state.connectWebSocket,
     userId: state.userId,
-    addMessage: state.addMessage
+    addMessage: state.addMessage,
+    addToast: state.addToast
   }))
 
   useEffect(() => {
@@ -79,7 +80,10 @@ export default function ChatInterface() {
         setAudioChunks(chunks)
       } catch (err) {
         console.error('Error accessing microphone:', err)
-        alert('Nie mogę uzyskać dostępu do mikrofonu. Sprawdź uprawnienia przeglądarki.')
+        addToast({
+          message: 'Nie mogę uzyskać dostępu do mikrofonu. Sprawdź uprawnienia przeglądarki.',
+          type: 'error'
+        })
       }
     } else {
       // Stop recording
@@ -128,11 +132,17 @@ export default function ChatInterface() {
 
         setInput('')
       } else {
-        alert('Błąd podczas przetwarzania audio')
+        addToast({
+          message: 'Błąd podczas przetwarzania audio',
+          type: 'error'
+        })
       }
     } catch (err) {
       console.error('Error uploading audio:', err)
-      alert('Wystąpił błąd podczas przesyłania nagrania')
+      addToast({
+        message: 'Wystąpił błąd podczas przesyłania nagrania',
+        type: 'error'
+      })
     } finally {
       setIsUploading(false)
     }
@@ -198,11 +208,17 @@ export default function ChatInterface() {
         setSelectedImage(null)
         setImagePreview(null)
       } else {
-        alert('Błąd podczas przetwarzania obrazu')
+        addToast({
+          message: 'Błąd podczas przetwarzania obrazu',
+          type: 'error'
+        })
       }
     } catch (err) {
       console.error('Error uploading image:', err)
-      alert('Wystąpił błąd podczas przesyłania obrazu')
+      addToast({
+        message: 'Wystąpił błąd podczas przesyłania obrazu',
+        type: 'error'
+      })
     } finally {
       setIsUploading(false)
     }

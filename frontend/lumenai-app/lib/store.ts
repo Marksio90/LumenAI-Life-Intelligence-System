@@ -19,9 +19,17 @@ interface Notification {
   agent?: string
 }
 
+interface Toast {
+  id: string
+  message: string
+  type: 'info' | 'success' | 'warning' | 'error'
+  duration?: number
+}
+
 interface ChatState {
   messages: Message[]
   notifications: Notification[]
+  toasts: Toast[]
   isTyping: boolean
   isConnected: boolean
   socket: Socket | null
@@ -31,6 +39,8 @@ interface ChatState {
   markNotificationRead: (id: string) => void
   markAllNotificationsRead: () => void
   clearNotifications: () => void
+  addToast: (toast: Omit<Toast, 'id'>) => void
+  removeToast: (id: string) => void
   sendMessage: (content: string, type: string) => void
   setTyping: (typing: boolean) => void
   connectWebSocket: () => void
@@ -54,6 +64,7 @@ const generateUserId = () => {
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   notifications: [],
+  toasts: [],
   isTyping: false,
   isConnected: false,
   socket: null,
@@ -91,6 +102,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   clearNotifications: () =>
     set({ notifications: [] }),
+
+  addToast: (toast) => {
+    const id = `toast_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const duration = toast.duration || 5000
+
+    set((state) => ({
+      toasts: [...state.toasts, { ...toast, id }]
+    }))
+
+    // Auto-remove after duration
+    setTimeout(() => {
+      get().removeToast(id)
+    }, duration)
+  },
+
+  removeToast: (id) =>
+    set((state) => ({
+      toasts: state.toasts.filter((t) => t.id !== id)
+    })),
 
   setTyping: (typing) =>
     set({ isTyping: typing }),
