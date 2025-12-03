@@ -21,6 +21,8 @@ from backend.services.mongodb_service import init_mongodb_service, get_mongodb_s
 from backend.services.chromadb_service import init_chromadb_service, get_chromadb_service
 from backend.services.embedding_service import init_embedding_service, get_embedding_service
 from backend.services.analytics_service import init_analytics_service, get_analytics_service
+from backend.ml.feature_engineering import FeatureEngineer
+from backend.ml.training_service import init_training_service, get_training_service
 
 
 # Connection Manager for WebSocket
@@ -57,12 +59,14 @@ mongodb_service = None
 chromadb_service = None
 embedding_service = None
 analytics_service = None
+feature_engineer = None
+training_service = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    global orchestrator, memory_manager, mongodb_service, chromadb_service, embedding_service, analytics_service
+    global orchestrator, memory_manager, mongodb_service, chromadb_service, embedding_service, analytics_service, feature_engineer, training_service
 
     logger.info("🚀 Starting LumenAI...")
 
@@ -124,6 +128,25 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️  Analytics Service failed: {e}")
         analytics_service = None
+
+    # Initialize ML Services (Feature Engineering + Training)
+    try:
+        feature_engineer = FeatureEngineer(
+            memory_manager=memory_manager,
+            embedding_service=embedding_service
+        )
+        logger.info("✅ Feature Engineer initialized")
+
+        training_service = init_training_service(
+            memory_manager=memory_manager,
+            feature_engineer=feature_engineer,
+            models_dir="backend/ml/models"
+        )
+        logger.info("✅ ML Training Service initialized")
+    except Exception as e:
+        logger.warning(f"⚠️  ML Services failed: {e}. Running without ML capabilities.")
+        feature_engineer = None
+        training_service = None
 
     logger.info("✅ LumenAI initialized successfully")
 
@@ -797,6 +820,278 @@ async def analytics_health():
 
     except Exception as e:
         logger.error(f"Analytics health check failed: {e}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+
+# ============================================================================
+# MACHINE LEARNING - Personalized ML Models
+# ============================================================================
+
+@app.post("/api/v1/ml/train/mood-predictor/{user_id}")
+async def train_mood_predictor(user_id: str, min_samples: int = 50):
+    """
+    Trenuje personalizowany model przewidywania nastroju dla użytkownika.
+
+    Model uczy się na historycznych danych użytkownika i potrafi przewidzieć
+    przyszły nastrój na podstawie kontekstu rozmowy.
+
+    Example:
+        POST /api/v1/ml/train/mood-predictor/user_123?min_samples=50
+
+    Response:
+        {
+            "success": true,
+            "model_type": "mood_predictor",
+            "user_id": "user_123",
+            "n_samples": 150,
+            "metrics": {
+                "test_rmse": 1.23,
+                "test_mae": 0.98
+            },
+            "top_features": [...]
+        }
+    """
+    try:
+        training = get_training_service()
+        if not training:
+            raise HTTPException(status_code=503, detail="ML Training Service not available")
+
+        result = await training.train_mood_predictor(
+            user_id=user_id,
+            min_samples=min_samples
+        )
+
+        if not result.get("success"):
+            raise HTTPException(status_code=400, detail=result.get("error", "Training failed"))
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Mood predictor training failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/ml/train/behavior-profiler/{user_id}")
+async def train_behavior_profiler(user_id: str, min_samples: int = 50):
+    """
+    Trenuje personalizowany model profilowania zachowań użytkownika.
+
+    Model klasyfikuje zachowania użytkownika (positive/neutral/negative)
+    na podstawie wzorców w danych historycznych.
+
+    Example:
+        POST /api/v1/ml/train/behavior-profiler/user_123?min_samples=50
+
+    Response:
+        {
+            "success": true,
+            "model_type": "behavior_profiler",
+            "user_id": "user_123",
+            "n_samples": 150,
+            "metrics": {
+                "test_accuracy": 0.85,
+                "test_f1": 0.82
+            },
+            "class_distribution": {...}
+        }
+    """
+    try:
+        training = get_training_service()
+        if not training:
+            raise HTTPException(status_code=503, detail="ML Training Service not available")
+
+        result = await training.train_behavior_profiler(
+            user_id=user_id,
+            min_samples=min_samples
+        )
+
+        if not result.get("success"):
+            raise HTTPException(status_code=400, detail=result.get("error", "Training failed"))
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Behavior profiler training failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/ml/predict/mood")
+async def predict_mood(user_id: str, message: str):
+    """
+    Przewiduje nastrój użytkownika na podstawie aktualnego kontekstu.
+
+    Wymaga wcześniej wytrenowanego modelu dla tego użytkownika.
+
+    Example:
+        POST /api/v1/ml/predict/mood
+        Body: {"user_id": "user_123", "message": "Czuję się dzisiaj świetnie!"}
+
+    Response:
+        {
+            "status": "success",
+            "user_id": "user_123",
+            "prediction": {
+                "predicted_mood": 8.2,
+                "confidence": 0.75,
+                "timestamp": "2025-12-03T12:00:00"
+            }
+        }
+    """
+    try:
+        training = get_training_service()
+        if not training:
+            raise HTTPException(status_code=503, detail="ML Training Service not available")
+
+        prediction = await training.predict_mood(user_id=user_id, message=message)
+
+        if prediction is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No trained mood predictor model found for user {user_id}. Please train first."
+            )
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "prediction": prediction
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Mood prediction failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/ml/predict/behavior")
+async def predict_behavior(user_id: str, message: str):
+    """
+    Klasyfikuje zachowanie użytkownika (positive/neutral/negative).
+
+    Wymaga wcześniej wytrenowanego modelu dla tego użytkownika.
+
+    Example:
+        POST /api/v1/ml/predict/behavior
+        Body: {"user_id": "user_123", "message": "Mam problem z pracą"}
+
+    Response:
+        {
+            "status": "success",
+            "user_id": "user_123",
+            "prediction": {
+                "predicted_class": "negative",
+                "probabilities": {
+                    "positive": 0.15,
+                    "neutral": 0.25,
+                    "negative": 0.60
+                },
+                "timestamp": "2025-12-03T12:00:00"
+            }
+        }
+    """
+    try:
+        training = get_training_service()
+        if not training:
+            raise HTTPException(status_code=503, detail="ML Training Service not available")
+
+        prediction = await training.predict_behavior(user_id=user_id, message=message)
+
+        if prediction is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No trained behavior profiler model found for user {user_id}. Please train first."
+            )
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "prediction": prediction
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Behavior prediction failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/ml/model/{user_id}/info")
+async def get_model_info(user_id: str, model_type: str = "mood_predictor"):
+    """
+    Zwraca informacje o wytrenowanym modelu użytkownika.
+
+    Args:
+        user_id: ID użytkownika
+        model_type: Typ modelu (mood_predictor lub behavior_profiler)
+
+    Example:
+        GET /api/v1/ml/model/user_123/info?model_type=mood_predictor
+
+    Response:
+        {
+            "status": "success",
+            "model_info": {
+                "model_type": "mood_predictor",
+                "trained_at": "2025-12-03T12:00:00",
+                "n_samples": 150,
+                "metrics": {...}
+            }
+        }
+    """
+    try:
+        training = get_training_service()
+        if not training:
+            raise HTTPException(status_code=503, detail="ML Training Service not available")
+
+        info = training.get_model_info(user_id, model_type)
+
+        if info is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No {model_type} model found for user {user_id}"
+            )
+
+        return {
+            "status": "success",
+            "model_info": info
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get model info failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/ml/health")
+async def ml_health():
+    """Check ML Services status"""
+    try:
+        training = get_training_service()
+        feature_eng = feature_engineer
+
+        return {
+            "status": "healthy" if (training and feature_eng) else "unavailable",
+            "services": {
+                "feature_engineer": "available" if feature_eng else "unavailable",
+                "training_service": "available" if training else "unavailable"
+            },
+            "capabilities": {
+                "mood_prediction": training is not None,
+                "behavior_profiling": training is not None,
+                "feature_extraction": feature_eng is not None
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"ML health check failed: {e}")
         return {
             "status": "error",
             "message": str(e)
