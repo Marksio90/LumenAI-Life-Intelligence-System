@@ -35,6 +35,8 @@ class Orchestrator:
             from backend.agents.cognitive.decision_agent import DecisionAgent
             from backend.agents.vision.vision_agent import VisionAgent
             from backend.agents.speech.speech_agent import SpeechAgent
+            from backend.agents.planning.finance_agent import FinanceAgent
+            from backend.agents.automation.automation_agent import AutomationAgent
 
             self.agents = {
                 "planner": PlannerAgent(memory_manager=self.memory_manager),
@@ -42,8 +44,8 @@ class Orchestrator:
                 "decision": DecisionAgent(memory_manager=self.memory_manager),
                 "vision": VisionAgent(memory_manager=self.memory_manager),
                 "speech": SpeechAgent(memory_manager=self.memory_manager),
-                # "finance": FinanceAgent(),
-                # "automation": AutomationAgent(),
+                "finance": FinanceAgent(memory_manager=self.memory_manager),
+                "automation": AutomationAgent(memory_manager=self.memory_manager),
             }
 
             logger.info(f"✅ Initialized {len(self.agents)} agents: {list(self.agents.keys())}")
@@ -152,10 +154,10 @@ Available agents:
 - planner: Scheduling, calendar, tasks, reminders, time management
 - mood: Emotional support, mental health, feelings, therapy
 - decision: Life decisions, choices, dilemmas, advice
-- finance: Money, budget, expenses, financial planning
-- vision: Image analysis, photo interpretation, OCR
+- finance: Money, budget, expenses, savings goals, financial planning, tracking spending
+- vision: Image analysis, photo interpretation, OCR, object detection
 - speech: Audio transcription, voice commands, text-to-speech
-- automation: Actions like sending emails, creating notes
+- automation: Sending emails, calendar integration, note creation, webhooks, external API integrations
 - general: General conversation, questions not fitting other categories
 
 User message: "{message}"
@@ -199,9 +201,10 @@ Respond with JSON:
             "planner": ["plan", "kalendarz", "zadanie", "przypomnienie", "spotkanie", "termin"],
             "mood": ["czuję", "emocje", "smutek", "stres", "niepokój", "radość"],
             "decision": ["decyzja", "wybór", "czy powinienem", "pomóż zdecydować"],
-            "finance": ["pieniądze", "budżet", "wydatki", "oszczędności", "koszty"],
+            "finance": ["pieniądze", "budżet", "wydatki", "oszczędności", "koszty", "wydałem", "zapłaciłem"],
             "vision": ["obraz", "zdjęcie", "foto", "co widzisz", "przeczytaj tekst", "ocr"],
             "speech": ["nagraj", "przeczytaj", "powiedz", "transkrypcja", "audio"],
+            "automation": ["wyślij", "email", "kalendarz", "notatka", "webhook", "automatyzacja", "integracja"],
         }
 
         for agent, words in keywords.items():

@@ -1066,6 +1066,183 @@ async def text_to_speech(
 
 
 # ============================================================================
+# FINANCE - Budget and Expense Tracking
+# ============================================================================
+
+@app.post("/api/v1/finance/expense")
+async def add_expense(
+    user_id: str,
+    amount: float,
+    category: str,
+    description: str = "",
+    date: Optional[str] = None
+):
+    """
+    Add expense entry for user.
+
+    Example:
+        POST /api/v1/finance/expense
+        Body: {
+            "user_id": "user_123",
+            "amount": 45.50,
+            "category": "jedzenie",
+            "description": "Lunch w restauracji",
+            "date": "2025-12-03"
+        }
+
+    Response:
+        {
+            "status": "success",
+            "expense_id": "exp_123",
+            "message": "Expense added successfully"
+        }
+    """
+    try:
+        expense_data = {
+            "amount": amount,
+            "category": category,
+            "description": description,
+            "date": date or datetime.utcnow().isoformat(),
+            "created_at": datetime.utcnow().isoformat()
+        }
+
+        # Store in user context (in production, would be separate expenses collection)
+        if memory_manager:
+            await memory_manager.store_user_context(
+                user_id=user_id,
+                context_type="expense",
+                key=f"expense_{datetime.utcnow().timestamp()}",
+                value=expense_data,
+                source="finance_api"
+            )
+
+        return {
+            "status": "success",
+            "expense_id": f"exp_{int(datetime.utcnow().timestamp())}",
+            "expense": expense_data,
+            "message": "💰 Wydatek dodany pomyślnie!"
+        }
+
+    except Exception as e:
+        logger.error(f"Add expense failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/finance/expenses/{user_id}")
+async def get_expenses(
+    user_id: str,
+    days: int = 30,
+    category: Optional[str] = None
+):
+    """
+    Get user's expenses for specified period.
+
+    Example:
+        GET /api/v1/finance/expenses/user_123?days=7&category=jedzenie
+
+    Response:
+        {
+            "status": "success",
+            "user_id": "user_123",
+            "period_days": 7,
+            "total_expenses": 345.50,
+            "expenses": [...],
+            "by_category": {...}
+        }
+    """
+    try:
+        # In production, fetch from expenses collection
+        # For now, return helpful structure
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "period_days": days,
+            "category_filter": category,
+            "total_expenses": 0.0,
+            "expenses": [],
+            "by_category": {},
+            "message": "Zacznij dodawać wydatki, aby zobaczyć statystyki!"
+        }
+
+    except Exception as e:
+        logger.error(f"Get expenses failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/finance/budget/{user_id}")
+async def get_budget(user_id: str):
+    """
+    Get user's budget overview and spending statistics.
+
+    Example:
+        GET /api/v1/finance/budget/user_123
+
+    Response:
+        {
+            "status": "success",
+            "user_id": "user_123",
+            "monthly_budget": 3000.0,
+            "spent_this_month": 1234.56,
+            "remaining": 1765.44,
+            "top_categories": [...]
+        }
+    """
+    try:
+        # In production, calculate from actual expenses
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "monthly_budget": None,
+            "spent_this_month": 0.0,
+            "remaining": None,
+            "top_categories": [],
+            "message": "Ustaw budżet miesięczny, aby śledzić wydatki!"
+        }
+
+    except Exception as e:
+        logger.error(f"Get budget failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/finance/budget/{user_id}")
+async def set_budget(user_id: str, monthly_amount: float):
+    """
+    Set monthly budget for user.
+
+    Example:
+        POST /api/v1/finance/budget/user_123
+        Body: {"monthly_amount": 3000.0}
+
+    Response:
+        {
+            "status": "success",
+            "message": "Budget set to 3000 PLN/month"
+        }
+    """
+    try:
+        if memory_manager:
+            await memory_manager.store_user_context(
+                user_id=user_id,
+                context_type="budget",
+                key="monthly_budget",
+                value=monthly_amount,
+                source="finance_api"
+            )
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "monthly_budget": monthly_amount,
+            "message": f"💰 Budżet ustawiony: {monthly_amount} PLN/miesiąc"
+        }
+
+    except Exception as e:
+        logger.error(f"Set budget failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # MACHINE LEARNING - Personalized ML Models
 # ============================================================================
 
