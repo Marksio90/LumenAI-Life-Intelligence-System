@@ -41,6 +41,22 @@ class MemoryManager:
         except:
             return None
 
+    def _get_chromadb(self):
+        """Helper to get ChromaDB service (returns None if not connected)"""
+        try:
+            from backend.services.chromadb_service import get_chromadb_service
+            return get_chromadb_service()
+        except:
+            return None
+
+    def _get_embedding_service(self):
+        """Helper to get Embedding service (returns None if not initialized)"""
+        try:
+            from backend.services.embedding_service import get_embedding_service
+            return get_embedding_service()
+        except:
+            return None
+
     async def _ensure_user_exists(self, user_id: str):
         """Ensure user exists in database"""
         db = self._get_db()
@@ -243,9 +259,63 @@ class MemoryManager:
         )
         await db.create_message(assistant_message)
 
+        # 3. Generate and store embeddings in ChromaDB (semantic search!)
+        await self._store_embeddings(user_msg_id, user_id, message, conversation_id, "user", agent)
+        await self._store_embeddings(assistant_msg_id, user_id, response, conversation_id, "assistant", agent)
+
         # Invalidate cache
         if user_id in self.user_context_cache:
             del self.user_context_cache[user_id]
+
+    async def _store_embeddings(
+        self,
+        message_id: str,
+        user_id: str,
+        content: str,
+        conversation_id: str,
+        role: str,
+        agent: Optional[str] = None
+    ):
+        """
+        Generate embedding and store in ChromaDB for semantic search.
+
+        Args:
+            message_id: MongoDB message ID
+            user_id: User ID
+            content: Message content
+            conversation_id: Conversation ID
+            role: "user" or "assistant"
+            agent: Optional agent name
+        """
+        embedding_service = self._get_embedding_service()
+        chromadb = self._get_chromadb()
+
+        if not embedding_service or not chromadb:
+            logger.debug("⚠️  Embedding/ChromaDB not available, skipping vector storage")
+            return
+
+        try:
+            # Generate embedding
+            embedding = await embedding_service.generate(content)
+
+            # Store in ChromaDB
+            await chromadb.add_message(
+                message_id=message_id,
+                user_id=user_id,
+                content=content,
+                embedding=embedding,
+                metadata={
+                    "conversation_id": conversation_id,
+                    "role": role,
+                    "agent": agent or "none",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+
+            logger.debug(f"✨ Stored embedding for message {message_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to store embedding: {e}")
 
         logger.debug(f"💾 Stored interaction for {user_id} in conversation {conversation_id}")
 
@@ -450,3 +520,94 @@ class MemoryManager:
             return {}
 
         return await db.get_mood_statistics(user_id, days=days)
+
+    # ========================================================================
+    # SEMANTIC SEARCH - ChromaDB Integration
+    # ========================================================================
+
+    async def search_similar_conversations(
+        self,
+        user_id: str,
+        query: str,
+        n_results: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Wyszukaj podobne rozmowy używając semantycznego wyszukiwania.
+
+        Przykład użycia:
+            results = await memory.search_similar_conversations(
+                user_id="user_123",
+                query="Jak radzić sobie ze stresem?",
+                n_results=5
+            )
+
+        Args:
+            user_id: ID użytkownika
+            query: Zapytanie tekstowe
+            n_results: Ile wyników zwrócić
+
+        Returns:
+            Lista podobnych wiadomości z metadanymi
+        """
+        embedding_service = self._get_embedding_service()
+        chromadb = self._get_chromadb()
+
+        if not embedding_service or not chromadb:
+            logger.warning("Semantic search not available (ChromaDB/Embeddings disabled)")
+            return []
+
+        try:
+            # Generate embedding for query
+            query_embedding = await embedding_service.generate(query)
+
+            # Search similar messages
+            results = await chromadb.search_similar(
+                query_embedding=query_embedding,
+                user_id=user_id,
+                n_results=n_results
+            )
+
+            return results
+
+        except Exception as e:
+            logger.error(f"Semantic search failed: {e}")
+            return []
+
+    async def get_context_from_similar(
+        self,
+        user_id: str,
+        current_message: str,
+        n_results: int = 3
+    ) -> str:
+        """
+        Pobierz kontekst z podobnych przeszłych rozmów.
+
+        Użyj tego aby wzbogacić kontekst dla LLM:
+        "Użytkownik wcześniej rozmawiał o podobnych tematach..."
+
+        Args:
+            user_id: ID użytkownika
+            current_message: Aktualna wiadomość
+            n_results: Ile kontekstów zwrócić
+
+        Returns:
+            Sformatowany string z kontekstem
+        """
+        similar = await self.search_similar_conversations(
+            user_id=user_id,
+            query=current_message,
+            n_results=n_results
+        )
+
+        if not similar:
+            return ""
+
+        # Formatuj kontekst
+        context_parts = ["## Related past conversations:"]
+        for i, item in enumerate(similar, 1):
+            context_parts.append(
+                f"{i}. [{item['metadata'].get('timestamp', 'unknown')}] "
+                f"{item['content'][:150]}... (similarity: {item['similarity']:.2%})"
+            )
+
+        return "\n".join(context_parts)
