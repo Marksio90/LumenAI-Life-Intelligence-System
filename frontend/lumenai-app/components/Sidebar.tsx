@@ -22,10 +22,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
 
-  const { userId, clearMessages, addMessage } = useChatStore(state => ({
+  const { userId, clearMessages, addMessage, addToast } = useChatStore(state => ({
     userId: state.userId,
     clearMessages: state.clearMessages,
-    addMessage: state.addMessage
+    addMessage: state.addMessage,
+    addToast: state.addToast
   }))
 
   useEffect(() => {
@@ -76,7 +77,10 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       }
     } catch (err) {
       console.error('Error loading conversation:', err)
-      alert('Nie udało się załadować konwersacji')
+      addToast({
+        message: 'Nie udało się załadować konwersacji',
+        type: 'error'
+      })
     }
   }
 
@@ -95,10 +99,16 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       clearMessages()
       setConversations([])
       setActiveConversationId(null)
-      alert('Pamięć lokalna wyczyszczona! (Historia pozostała w bazie danych)')
+      addToast({
+        message: 'Pamięć lokalna wyczyszczona! (Historia pozostała w bazie danych)',
+        type: 'success'
+      })
     } catch (err) {
       console.error('Error clearing memory:', err)
-      alert('Wystąpił błąd podczas czyszczenia pamięci')
+      addToast({
+        message: 'Wystąpił błąd podczas czyszczenia pamięci',
+        type: 'error'
+      })
     }
   }
 
