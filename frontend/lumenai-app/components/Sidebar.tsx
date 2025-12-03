@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { X, Calendar, Heart, Brain, DollarSign, Settings, Trash2, MessageSquare, Plus, Loader2 } from 'lucide-react'
 import { useChatStore } from '@/lib/store'
+import Link from 'next/link'
 
 interface SidebarProps {
   isOpen: boolean
@@ -239,7 +240,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         {/* Settings */}
         <div className="p-4 space-y-2">
-          <NavItem icon={<Settings />} label="Settings" />
+          <Link href="/settings">
+            <NavItem icon={<Settings />} label="Settings" />
+          </Link>
           <NavItem
             icon={<Trash2 />}
             label="Clear Memory"
