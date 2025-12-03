@@ -18,6 +18,8 @@ from backend.shared.config.settings import settings
 from backend.core.orchestrator import Orchestrator
 from backend.core.memory import MemoryManager
 from backend.services.mongodb_service import init_mongodb_service, get_mongodb_service
+from backend.services.chromadb_service import init_chromadb_service, get_chromadb_service
+from backend.services.embedding_service import init_embedding_service, get_embedding_service
 
 
 # Connection Manager for WebSocket
@@ -51,12 +53,14 @@ manager = ConnectionManager()
 orchestrator = None
 memory_manager = None
 mongodb_service = None
+chromadb_service = None
+embedding_service = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    global orchestrator, memory_manager, mongodb_service
+    global orchestrator, memory_manager, mongodb_service, chromadb_service, embedding_service
 
     logger.info("🚀 Starting LumenAI...")
 
@@ -72,6 +76,32 @@ async def lifespan(app: FastAPI):
         logger.warning(f"⚠️  MongoDB connection failed: {e}. Running without persistence.")
         mongodb_service = None
 
+    # Initialize ChromaDB
+    try:
+        chromadb_service = init_chromadb_service(
+            host=settings.CHROMA_HOST,
+            port=settings.CHROMA_PORT
+        )
+        await chromadb_service.connect()
+        logger.info("✅ ChromaDB connected")
+    except Exception as e:
+        logger.warning(f"⚠️  ChromaDB connection failed: {e}. Running without vector search.")
+        chromadb_service = None
+
+    # Initialize Embedding Service
+    try:
+        if settings.OPENAI_API_KEY:
+            embedding_service = init_embedding_service(
+                api_key=settings.OPENAI_API_KEY
+            )
+            logger.info("✅ Embedding Service initialized")
+        else:
+            logger.warning("⚠️  No OpenAI API key - embeddings disabled")
+            embedding_service = None
+    except Exception as e:
+        logger.warning(f"⚠️  Embedding Service failed: {e}")
+        embedding_service = None
+
     # Initialize core systems
     memory_manager = MemoryManager()
     orchestrator = Orchestrator(memory_manager)
@@ -85,6 +115,9 @@ async def lifespan(app: FastAPI):
     if mongodb_service:
         await mongodb_service.disconnect()
         logger.info("✅ MongoDB disconnected")
+    if chromadb_service:
+        await chromadb_service.disconnect()
+        logger.info("✅ ChromaDB disconnected")
 
 
 # Create FastAPI app
@@ -401,3 +434,117 @@ if __name__ == "__main__":
         port=settings.API_PORT,
         reload=settings.DEBUG
     )
+
+# ============================================================================
+# SEMANTIC SEARCH - ChromaDB-powered endpoints
+# ============================================================================
+
+@app.post("/api/v1/search/conversations")
+async def search_conversations(user_id: str, query: str, n_results: int = 10):
+    """
+    Semantic search for conversations using ChromaDB.
+
+    Example:
+        POST /api/v1/search/conversations
+        Body: {"user_id": "user_123", "query": "jak radzić sobie ze stresem?", "n_results": 5}
+
+    Response:
+        {
+            "status": "success",
+            "query": "jak radzić sobie ze stresem?",
+            "total": 5,
+            "results": [
+                {
+                    "content": "...",
+                    "similarity": 0.92,
+                    "metadata": {...}
+                }
+            ]
+        }
+    """
+    try:
+        results = await memory_manager.search_similar_conversations(
+            user_id=user_id,
+            query=query,
+            n_results=n_results
+        )
+
+        return {
+            "status": "success",
+            "query": query,
+            "user_id": user_id,
+            "total": len(results),
+            "results": results
+        }
+
+    except Exception as e:
+        logger.error(f"Semantic search failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/chromadb/health")
+async def chromadb_health():
+    """Check ChromaDB connection status and stats"""
+    try:
+        chromadb = get_chromadb_service()
+        embedding_service = get_embedding_service()
+
+        chromadb_status = await chromadb.health_check() if chromadb else False
+        chromadb_stats = chromadb.get_stats() if chromadb else {}
+
+        embedding_stats = embedding_service.get_cache_stats() if embedding_service else {}
+
+        return {
+            "chromadb": {
+                "status": "healthy" if chromadb_status else "unavailable",
+                **chromadb_stats
+            },
+            "embeddings": {
+                "status": "available" if embedding_service else "unavailable",
+                **embedding_stats
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"ChromaDB health check failed: {e}")
+        return {
+            "chromadb": {"status": "error", "message": str(e)},
+            "embeddings": {"status": "unknown"}
+        }
+
+
+@app.post("/api/v1/embeddings/generate")
+async def generate_embedding(text: str):
+    """
+    Generate embedding for text (utility endpoint for testing).
+
+    Example:
+        POST /api/v1/embeddings/generate
+        Body: {"text": "Hello world"}
+
+    Response:
+        {
+            "status": "success",
+            "text": "Hello world",
+            "embedding": [0.123, -0.456, ...],  # 1536 dimensions
+            "dimensions": 1536
+        }
+    """
+    try:
+        embedding_service = get_embedding_service()
+        if not embedding_service:
+            raise HTTPException(status_code=503, detail="Embedding service not available")
+
+        embedding = await embedding_service.generate(text)
+
+        return {
+            "status": "success",
+            "text": text,
+            "embedding": embedding,
+            "dimensions": len(embedding)
+        }
+
+    except Exception as e:
+        logger.error(f"Embedding generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
