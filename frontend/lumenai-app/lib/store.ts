@@ -9,13 +9,28 @@ interface Message {
   agent?: string
 }
 
+interface Notification {
+  id: string
+  title: string
+  message: string
+  type: 'info' | 'success' | 'warning' | 'error'
+  timestamp: Date
+  read: boolean
+  agent?: string
+}
+
 interface ChatState {
   messages: Message[]
+  notifications: Notification[]
   isTyping: boolean
   isConnected: boolean
   socket: Socket | null
   userId: string
   addMessage: (message: Message) => void
+  addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void
+  markNotificationRead: (id: string) => void
+  markAllNotificationsRead: () => void
+  clearNotifications: () => void
   sendMessage: (content: string, type: string) => void
   setTyping: (typing: boolean) => void
   connectWebSocket: () => void
@@ -38,6 +53,7 @@ const generateUserId = () => {
 
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
+  notifications: [],
   isTyping: false,
   isConnected: false,
   socket: null,
@@ -47,6 +63,34 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => ({
       messages: [...state.messages, message]
     })),
+
+  addNotification: (notification) =>
+    set((state) => ({
+      notifications: [
+        {
+          ...notification,
+          id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          timestamp: new Date(),
+          read: false
+        },
+        ...state.notifications
+      ]
+    })),
+
+  markNotificationRead: (id) =>
+    set((state) => ({
+      notifications: state.notifications.map((n) =>
+        n.id === id ? { ...n, read: true } : n
+      )
+    })),
+
+  markAllNotificationsRead: () =>
+    set((state) => ({
+      notifications: state.notifications.map((n) => ({ ...n, read: true }))
+    })),
+
+  clearNotifications: () =>
+    set({ notifications: [] }),
 
   setTyping: (typing) =>
     set({ isTyping: typing }),
@@ -157,6 +201,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (data.status === 'typing') {
           set({ isTyping: true })
         }
+      })
+
+      socket.on('notification', (data) => {
+        const { addNotification } = get()
+        addNotification({
+          title: data.title || 'Nowe powiadomienie',
+          message: data.message || data.content,
+          type: data.type || 'info',
+          agent: data.agent
+        })
       })
 
       socket.on('error', (error) => {
