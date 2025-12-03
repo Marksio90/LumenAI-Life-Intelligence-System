@@ -19,10 +19,11 @@ class PlannerAgent(BaseAgent):
     - Reminders
     """
 
-    def __init__(self):
+    def __init__(self, memory_manager=None):
         super().__init__(
             name="Planner",
-            description="Zarządzanie czasem, planowanie zadań i organizacja dnia"
+            description="Zarządzanie czasem, planowanie zadań i organizacja dnia",
+            memory_manager=memory_manager
         )
 
     async def process(

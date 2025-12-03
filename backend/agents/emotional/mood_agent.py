@@ -19,10 +19,11 @@ class MoodAgent(BaseAgent):
     - Stress management
     """
 
-    def __init__(self):
+    def __init__(self, memory_manager=None):
         super().__init__(
             name="Mood",
-            description="Wsparcie emocjonalne, zdrowie psychiczne i zarządzanie nastrojem"
+            description="Wsparcie emocjonalne, zdrowie psychiczne i zarządzanie nastrojem",
+            memory_manager=memory_manager
         )
 
     async def process(
@@ -135,40 +136,69 @@ Bądź naturalny, ciepły, konkretny.
         return response
 
     async def track_mood(self, user_id: str, mood_data: Dict):
-        """Track user's mood over time"""
+        """Track user's mood over time - NOW SAVES TO MONGODB! 💾"""
 
-        # Store mood data
-        mood_entry = {
-            "timestamp": datetime.utcnow().isoformat(),
-            "mood": mood_data.get("mood"),
-            "intensity": mood_data.get("intensity"),
-            "notes": mood_data.get("notes"),
-            "triggers": mood_data.get("triggers", [])
-        }
-
-        # TODO: Store in database
-        logger.info(f"Tracked mood for {user_id}: {mood_entry}")
-
-        return mood_entry
+        # Save mood to MongoDB via memory_manager
+        if self.memory_manager:
+            entry_id = await self.memory_manager.save_mood_entry(
+                user_id=user_id,
+                mood_data={
+                    "primary": mood_data.get("mood", "neutral"),
+                    "intensity": mood_data.get("intensity", 5),
+                    "description": mood_data.get("notes"),
+                    "triggers": mood_data.get("triggers", [])
+                }
+            )
+            logger.info(f"😊 Tracked mood for {user_id}: {mood_data.get('mood')} (saved to DB: {entry_id})")
+            return {"entry_id": entry_id, **mood_data}
+        else:
+            logger.warning(f"Memory manager not available, mood not saved for {user_id}")
+            return mood_data
 
     async def get_mood_insights(self, user_id: str, days: int = 7) -> str:
-        """Get mood insights and patterns"""
+        """Get mood insights and patterns - NOW WITH REAL DATA FROM MONGODB! 📊"""
 
-        # Mock insights for now
+        if not self.memory_manager:
+            return "Statystyki nastrojów niedostępne (brak połączenia z bazą danych)."
+
+        # Get mood statistics from MongoDB
+        stats = await self.memory_manager.get_mood_statistics(user_id, days=days)
+
+        if not stats or stats.get("total_entries") == 0:
+            return f"📊 **Brak danych o nastrojach z ostatnich {days} dni.**\n\nZacznij śledzić swoje emocje, a ja pomogę Ci zauważyć wzorce! 💙"
+
+        # Generate insights based on real data
+        most_common = stats.get("most_common_mood", "neutral")
+        avg_intensity = stats.get("average_intensity", 5)
+        total = stats.get("total_entries", 0)
+        distribution = stats.get("mood_distribution", {})
+
+        mood_emojis = {
+            "happy": "😊",
+            "sad": "😢",
+            "anxious": "😰",
+            "angry": "😠",
+            "neutral": "😐",
+            "excited": "🎉",
+            "tired": "😴",
+            "stressed": "😓"
+        }
+
         insights = f"""
-📊 **Twoje emocje w ostatnich {days} dniach:**
+📊 **Twoje emocje w ostatnich {days} dni:**
 
-🌈 **Dominujący nastrój:** Stabilny z wahaniami
-📈 **Trend:** Lekka poprawa
-⚡ **Zauważone wzorce:**
-- Lepszy nastrój rano
-- Stres wzrasta wieczorami
-- Weekendy bardziej pozytywne
+🌈 **Dominujący nastrój:** {mood_emojis.get(most_common, '💙')} {most_common.capitalize()}
+📊 **Średnia intensywność:** {avg_intensity}/10
+📝 **Liczba wpisów:** {total}
 
-💡 **Sugestie:**
-- Rozważ wprowadzenie wieczornej rutyny relaksacyjnej
-- Kontynuuj to, co robisz weekendami!
+**Rozkład emocji:**
 """
+
+        for mood, count in sorted(distribution.items(), key=lambda x: x[1], reverse=True):
+            emoji = mood_emojis.get(mood, '•')
+            insights += f"\n{emoji} {mood.capitalize()}: {count}x"
+
+        insights += "\n\n💡 **Kontynuuj śledzenie swoich emocji - im więcej danych, tym lepsze wzorce zauważę!**"
 
         return insights
 
