@@ -3,6 +3,7 @@
 import { Menu, Sparkles, BarChart3 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import NotificationBell from './NotificationBell'
 
 interface HeaderProps {
   onMenuClick: () => void
@@ -59,10 +60,13 @@ export default function Header({ onMenuClick }: HeaderProps) {
           </Link>
         </nav>
 
-        {/* Right: Status */}
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-          <span className="text-sm text-gray-600 dark:text-gray-400">Online</span>
+        {/* Right: Notifications + Status */}
+        <div className="flex items-center gap-4">
+          <NotificationBell />
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <span className="text-sm text-gray-600 dark:text-gray-400 hidden sm:inline">Online</span>
+          </div>
         </div>
       </div>
     </header>
