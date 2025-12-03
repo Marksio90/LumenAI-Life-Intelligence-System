@@ -164,10 +164,8 @@ class MemoryManager:
         if user and user.profile:
             return {
                 "name": user.profile.name,
-                "age": user.profile.age,
                 "timezone": user.profile.timezone,
-                "interests": user.profile.interests,
-                "goals": user.profile.goals
+                "language": user.profile.language
             }
         return {}
 
