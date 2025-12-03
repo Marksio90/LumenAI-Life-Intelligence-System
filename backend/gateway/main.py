@@ -208,6 +208,29 @@ async def clear_user_memory(user_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/v1/stats/costs")
+async def get_cost_stats():
+    """Get LLM API cost statistics"""
+    try:
+        from backend.core.cost_tracker import cost_tracker
+        stats = cost_tracker.get_stats()
+
+        # Add estimated monthly cost
+        if stats["total_requests"] > 0:
+            stats["estimated_monthly_cost"] = cost_tracker.estimate_monthly_cost(
+                requests_per_day=100
+            )
+
+        return {
+            "status": "success",
+            "data": stats,
+            "message": f"💰 Total cost: ${stats['total_cost']:.4f}"
+        }
+    except Exception as e:
+        logger.error(f"Error fetching cost stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
 
