@@ -20,6 +20,7 @@ from backend.core.memory import MemoryManager
 from backend.services.mongodb_service import init_mongodb_service, get_mongodb_service
 from backend.services.chromadb_service import init_chromadb_service, get_chromadb_service
 from backend.services.embedding_service import init_embedding_service, get_embedding_service
+from backend.services.analytics_service import init_analytics_service, get_analytics_service
 
 
 # Connection Manager for WebSocket
@@ -55,12 +56,13 @@ memory_manager = None
 mongodb_service = None
 chromadb_service = None
 embedding_service = None
+analytics_service = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    global orchestrator, memory_manager, mongodb_service, chromadb_service, embedding_service
+    global orchestrator, memory_manager, mongodb_service, chromadb_service, embedding_service, analytics_service
 
     logger.info("🚀 Starting LumenAI...")
 
@@ -105,6 +107,23 @@ async def lifespan(app: FastAPI):
     # Initialize core systems
     memory_manager = MemoryManager()
     orchestrator = Orchestrator(memory_manager)
+
+    # Initialize Analytics Service (requires all other services)
+    try:
+        if chromadb_service and embedding_service:
+            analytics_service = init_analytics_service(
+                llm_engine=orchestrator.llm_engine,
+                memory_manager=memory_manager,
+                chromadb_service=chromadb_service,
+                embedding_service=embedding_service
+            )
+            logger.info("✅ Analytics Service initialized")
+        else:
+            logger.warning("⚠️  Analytics Service disabled (requires ChromaDB + Embeddings)")
+            analytics_service = None
+    except Exception as e:
+        logger.warning(f"⚠️  Analytics Service failed: {e}")
+        analytics_service = None
 
     logger.info("✅ LumenAI initialized successfully")
 
@@ -547,4 +566,239 @@ async def generate_embedding(text: str):
     except Exception as e:
         logger.error(f"Embedding generation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# ANALYTICS - Advanced Conversation Analysis
+# ============================================================================
+
+@app.post("/api/v1/analytics/conversation/{conversation_id}/summary")
+async def summarize_conversation(conversation_id: str, max_length: int = 200):
+    """
+    Generate automatic conversation summary using LLM.
+
+    Example:
+        POST /api/v1/analytics/conversation/conv_123/summary?max_length=150
+
+    Response:
+        {
+            "status": "success",
+            "conversation_id": "conv_123",
+            "summary": {
+                "summary": "Użytkownik rozmawiał o stresie w pracy...",
+                "key_topics": ["praca", "stres", "zarządzanie czasem"],
+                "sentiment": "neutral",
+                "action_items": ["Spróbuj techniki oddechowej..."],
+                "insights": ["Wzrost stresu w ostatnich dniach"]
+            }
+        }
+    """
+    try:
+        analytics = get_analytics_service()
+        if not analytics:
+            raise HTTPException(status_code=503, detail="Analytics service not available")
+
+        summary = await analytics.summarize_conversation(
+            conversation_id=conversation_id,
+            max_length=max_length
+        )
+
+        return {
+            "status": "success",
+            "conversation_id": conversation_id,
+            "summary": summary
+        }
+
+    except Exception as e:
+        logger.error(f"Conversation summarization failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/analytics/user/{user_id}/clusters")
+async def get_topic_clusters(user_id: str, n_clusters: int = 5, min_conversations: int = 3):
+    """
+    Group user's conversations by topics using K-means clustering.
+
+    Example:
+        GET /api/v1/analytics/user/user_123/clusters?n_clusters=5
+
+    Response:
+        {
+            "status": "success",
+            "user_id": "user_123",
+            "total_clusters": 3,
+            "clusters": [
+                {
+                    "cluster_id": 0,
+                    "label": "Praca i kariera",
+                    "size": 12,
+                    "sample_topics": ["rozmowa kwalifikacyjna", "zarządzanie czasem"]
+                },
+                ...
+            ]
+        }
+    """
+    try:
+        analytics = get_analytics_service()
+        if not analytics:
+            raise HTTPException(status_code=503, detail="Analytics service not available")
+
+        clusters = await analytics.cluster_conversations_by_topic(
+            user_id=user_id,
+            n_clusters=n_clusters,
+            min_conversations=min_conversations
+        )
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "total_clusters": len(clusters["clusters"]),
+            "clusters": clusters["clusters"]
+        }
+
+    except Exception as e:
+        logger.error(f"Topic clustering failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/analytics/user/{user_id}/trends")
+async def get_mood_trends(user_id: str, days: int = 30):
+    """
+    Analyze mood trends over time with statistical analysis.
+
+    Example:
+        GET /api/v1/analytics/user/user_123/trends?days=30
+
+    Response:
+        {
+            "status": "success",
+            "user_id": "user_123",
+            "period": "30 days",
+            "trends": {
+                "trend": "improving",  # improving/declining/stable
+                "slope": 0.15,
+                "statistics": {
+                    "average_intensity": 7.2,
+                    "volatility": "moderate",
+                    "most_common_mood": "happy"
+                },
+                "data_points": [...],
+                "insights": ["Mood improving over last 2 weeks", ...]
+            }
+        }
+    """
+    try:
+        analytics = get_analytics_service()
+        if not analytics:
+            raise HTTPException(status_code=503, detail="Analytics service not available")
+
+        trends = await analytics.analyze_mood_trends(
+            user_id=user_id,
+            days=days
+        )
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "period": f"{days} days",
+            "trends": trends
+        }
+
+    except Exception as e:
+        logger.error(f"Trend analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/analytics/user/{user_id}/recommendations")
+async def get_recommendations(user_id: str, n_recommendations: int = 5):
+    """
+    Get personalized recommendations based on conversation patterns.
+
+    Example:
+        GET /api/v1/analytics/user/user_123/recommendations?n_recommendations=5
+
+    Response:
+        {
+            "status": "success",
+            "user_id": "user_123",
+            "total": 5,
+            "recommendations": [
+                {
+                    "type": "topic",
+                    "title": "Eksploruj techniki mindfulness",
+                    "description": "Na podstawie twoich rozmów o stresie...",
+                    "confidence": 0.85,
+                    "source": "topic_clustering"
+                },
+                {
+                    "type": "mood",
+                    "title": "Rozważ regularne ćwiczenia",
+                    "description": "Twój nastrój poprawia się w dni, gdy wspominasz o aktywności",
+                    "confidence": 0.72,
+                    "source": "mood_trends"
+                },
+                ...
+            ]
+        }
+    """
+    try:
+        analytics = get_analytics_service()
+        if not analytics:
+            raise HTTPException(status_code=503, detail="Analytics service not available")
+
+        recommendations = await analytics.get_recommendations(
+            user_id=user_id,
+            n_recommendations=n_recommendations
+        )
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "total": len(recommendations["recommendations"]),
+            "recommendations": recommendations["recommendations"]
+        }
+
+    except Exception as e:
+        logger.error(f"Recommendations generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/analytics/health")
+async def analytics_health():
+    """Check Analytics Service status and dependencies"""
+    try:
+        analytics = get_analytics_service()
+
+        if not analytics:
+            return {
+                "status": "unavailable",
+                "message": "Analytics service not initialized (requires ChromaDB + Embeddings)"
+            }
+
+        # Check all dependencies
+        chromadb_ok = await analytics.chromadb.health_check() if analytics.chromadb else False
+        embedding_ok = analytics.embeddings is not None
+
+        return {
+            "status": "healthy" if (chromadb_ok and embedding_ok) else "degraded",
+            "dependencies": {
+                "chromadb": "healthy" if chromadb_ok else "unavailable",
+                "embeddings": "available" if embedding_ok else "unavailable",
+                "llm_engine": "available" if analytics.llm else "unavailable",
+                "memory_manager": "available" if analytics.memory else "unavailable"
+            },
+            "features": {
+                "summarization": analytics.llm is not None,
+                "clustering": chromadb_ok and embedding_ok,
+                "trends": True,  # Only needs MongoDB
+                "recommendations": chromadb_ok and embedding_ok
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Analytics health check failed: {e}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
