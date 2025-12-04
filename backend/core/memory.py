@@ -611,3 +611,15 @@ class MemoryManager:
             )
 
         return "\n".join(context_parts)
+
+
+# Global instance
+_memory_manager = None
+
+
+def get_memory_manager() -> MemoryManager:
+    """Get or create the global MemoryManager instance."""
+    global _memory_manager
+    if _memory_manager is None:
+        _memory_manager = MemoryManager()
+    return _memory_manager
