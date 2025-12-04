@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { api } from '@/lib/apiClient';
 
 interface User {
   user_id: string;
@@ -8,7 +9,8 @@ interface User {
   full_name?: string;
   avatar_url?: string;
   is_active: boolean;
-  is_verified: boolean;
+  is_email_verified: boolean;
+  is_superuser: boolean;
   created_at: string;
 }
 
@@ -28,13 +30,11 @@ interface AuthState {
     full_name?: string;
   }) => Promise<void>;
   logout: () => void;
-  refreshAccessToken: () => Promise<boolean>;
+  refreshAccessToken: () => Promise<string | null>;
   setUser: (user: User) => void;
   setTokens: (accessToken: string, refreshToken: string) => void;
-  checkAuth: () => void;
+  checkAuth: () => Promise<boolean>;
 }
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -50,20 +50,8 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
 
         try {
-          const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ email, password }),
-          });
-
-          if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message || 'Login failed');
-          }
-
-          const data = await response.json();
+          const response = await api.auth.login(email, password);
+          const data = response.data;
 
           set({
             user: data.user,
@@ -72,9 +60,9 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: true,
             isLoading: false,
           });
-        } catch (error) {
+        } catch (error: any) {
           set({ isLoading: false });
-          throw error;
+          throw new Error(error.response?.data?.message || 'Login failed');
         }
       },
 
@@ -83,20 +71,13 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
 
         try {
-          const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data),
-          });
-
-          if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message || 'Registration failed');
-          }
-
-          const result = await response.json();
+          const response = await api.auth.register(
+            data.email,
+            data.password,
+            data.username,
+            data.full_name || ''
+          );
+          const result = response.data;
 
           set({
             user: result.user,
@@ -105,14 +86,21 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: true,
             isLoading: false,
           });
-        } catch (error) {
+        } catch (error: any) {
           set({ isLoading: false });
-          throw error;
+          throw new Error(error.response?.data?.message || 'Registration failed');
         }
       },
 
       // Logout
       logout: () => {
+        // Call logout API (optional - token will be invalidated on server)
+        try {
+          api.auth.logout();
+        } catch (error) {
+          // Ignore errors - clear local state anyway
+        }
+
         set({
           user: null,
           accessToken: null,
@@ -126,34 +114,23 @@ export const useAuthStore = create<AuthState>()(
         const { refreshToken } = get();
 
         if (!refreshToken) {
-          return false;
+          return null;
         }
 
         try {
-          const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ refresh_token: refreshToken }),
-          });
+          const response = await api.auth.refreshToken(refreshToken);
+          const data = response.data;
 
-          if (!response.ok) {
-            // Refresh token expired or invalid
-            get().logout();
-            return false;
-          }
-
-          const data = await response.json();
+          const newAccessToken = data.access_token;
 
           set({
-            accessToken: data.access_token,
+            accessToken: newAccessToken,
           });
 
-          return true;
+          return newAccessToken;
         } catch (error) {
           get().logout();
-          return false;
+          return null;
         }
       },
 
@@ -167,10 +144,51 @@ export const useAuthStore = create<AuthState>()(
         set({ accessToken, refreshToken, isAuthenticated: true });
       },
 
-      // Check authentication status on app load
-      checkAuth: () => {
+      // Check authentication status with backend verification
+      checkAuth: async () => {
         const { accessToken, user } = get();
-        set({ isAuthenticated: !!(accessToken && user) });
+
+        if (!accessToken || !user) {
+          set({ isAuthenticated: false });
+          return false;
+        }
+
+        try {
+          // Verify token with backend
+          const response = await api.auth.getProfile();
+          const userData = response.data;
+
+          set({
+            user: userData,
+            isAuthenticated: true,
+          });
+
+          return true;
+        } catch (error) {
+          // Token invalid or expired, try to refresh
+          const newToken = await get().refreshAccessToken();
+
+          if (newToken) {
+            // Refresh successful, try again
+            try {
+              const response = await api.auth.getProfile();
+              const userData = response.data;
+
+              set({
+                user: userData,
+                isAuthenticated: true,
+              });
+
+              return true;
+            } catch (error) {
+              get().logout();
+              return false;
+            }
+          } else {
+            get().logout();
+            return false;
+          }
+        }
       },
     }),
     {

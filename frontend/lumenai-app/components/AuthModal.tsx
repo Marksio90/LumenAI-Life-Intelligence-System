@@ -22,14 +22,15 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="relative w-full max-w-md">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+      <div className="relative w-full max-w-md my-auto">
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute -top-4 -right-4 p-2 bg-white dark:bg-gray-800 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors z-10"
+          className="absolute -top-2 -right-2 sm:-top-4 sm:-right-4 p-1.5 sm:p-2 bg-white dark:bg-gray-800 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors z-10"
+          aria-label="Close modal"
         >
-          <X size={24} className="text-gray-600 dark:text-gray-300" />
+          <X size={20} className="sm:w-6 sm:h-6 text-gray-600 dark:text-gray-300" />
         </button>
 
         {/* Form */}
