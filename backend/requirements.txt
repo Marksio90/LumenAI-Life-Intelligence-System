@@ -10,17 +10,22 @@ websockets==12.0
 python-socketio==5.11.0
 
 # LLM & AI Frameworks
-langchain==0.1.4
-langchain-community==0.0.16
-langchain-core==0.1.16
+langchain==1.1.1
+langchain-community==0.0.38
+langchain-core==1.1.0
+langchain-openai==1.1.0
 llama-index==0.9.48
-openai==1.10.0
+openai==2.8.1
 anthropic==0.8.1
+cohere==5.20.0
+tiktoken==0.12.0
 
-# Vector Database
+# Vector Database & RAG
+qdrant-client==1.16.1
 chromadb==0.4.22
 pinecone-client==3.0.2
 sentence-transformers==2.3.1
+rank-bm25==0.2.2
 
 # Machine Learning
 torch==2.1.2
