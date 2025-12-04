@@ -229,10 +229,18 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         {/* Quick Actions */}
         <nav className="p-4 space-y-2">
-          <NavItem icon={<Calendar />} label="Planner" />
-          <NavItem icon={<Heart />} label="Mood Tracker" />
-          <NavItem icon={<Brain />} label="Decisions" />
-          <NavItem icon={<DollarSign />} label="Finance" />
+          <Link href="/planner">
+            <NavItem icon={<Calendar />} label="Planner" badge="New" />
+          </Link>
+          <Link href="/mood">
+            <NavItem icon={<Heart />} label="Mood Tracker" />
+          </Link>
+          <Link href="/decisions">
+            <NavItem icon={<Brain />} label="Decisions" />
+          </Link>
+          <Link href="/finance">
+            <NavItem icon={<DollarSign />} label="Finance" badge="Beta" />
+          </Link>
         </nav>
 
         {/* Divider */}
@@ -254,8 +262,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Footer */}
         <div className="p-6 border-t border-gray-200 dark:border-slate-800">
           <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
-            <p>LumenAI v1.0.0</p>
-            <p className="mt-1">© 2024 Life Intelligence</p>
+            <p className="font-semibold text-purple-500">LumenAI v2.0</p>
+            <p className="mt-1">© 2025 Life Intelligence System</p>
+            <p className="mt-2 text-[10px]">Powered by Multi-Agent AI</p>
           </div>
         </div>
       </aside>

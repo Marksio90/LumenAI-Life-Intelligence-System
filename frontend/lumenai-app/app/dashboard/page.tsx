@@ -97,12 +97,15 @@ export default function DashboardPage() {
       <div className="max-w-7xl mx-auto mb-8">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold gradient-text mb-2">📊 Dashboard</h1>
-            <p className="text-gray-600 dark:text-gray-400">Twoja aktywność i statystyki</p>
+            <h1 className="text-3xl font-bold gradient-text mb-2">📊 Dashboard v2.0</h1>
+            <p className="text-gray-600 dark:text-gray-400">
+              Twoja aktywność i statystyki · Real-time data z MongoDB
+            </p>
+            <p className="text-xs text-gray-500 mt-1">Ostatnia aktualizacja: {new Date().toLocaleString('pl-PL')}</p>
           </div>
           <Link
             href="/"
-            className="px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all"
+            className="px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all shadow-lg"
           >
             💬 Powrót do Chatu
           </Link>
