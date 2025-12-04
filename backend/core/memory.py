@@ -41,19 +41,27 @@ class MemoryManager:
         except:
             return None
 
-    def _get_chromadb(self):
-        """Helper to get ChromaDB service (returns None if not connected)"""
+    def _get_rag_pipeline(self):
+        """Helper to get RAG Pipeline (returns None if not initialized)"""
         try:
-            from backend.services.chromadb_service import get_chromadb_service
-            return get_chromadb_service()
+            from backend.services.rag import get_rag_pipeline
+            return get_rag_pipeline()
         except:
             return None
 
     def _get_embedding_service(self):
         """Helper to get Embedding service (returns None if not initialized)"""
         try:
-            from backend.services.embedding_service import get_embedding_service
+            from backend.services.rag import get_embedding_service
             return get_embedding_service()
+        except:
+            return None
+
+    def _get_chunking_service(self):
+        """Helper to get Chunking service (returns None if not initialized)"""
+        try:
+            from backend.services.rag import get_chunking_service
+            return get_chunking_service()
         except:
             return None
 
@@ -277,7 +285,7 @@ class MemoryManager:
         agent: Optional[str] = None
     ):
         """
-        Generate embedding and store in ChromaDB for semantic search.
+        Generate embedding and store in RAG system (Qdrant) for semantic search.
 
         Args:
             message_id: MongoDB message ID
@@ -287,35 +295,36 @@ class MemoryManager:
             role: "user" or "assistant"
             agent: Optional agent name
         """
-        embedding_service = self._get_embedding_service()
-        chromadb = self._get_chromadb()
+        rag_pipeline = self._get_rag_pipeline()
 
-        if not embedding_service or not chromadb:
-            logger.debug("⚠️  Embedding/ChromaDB not available, skipping vector storage")
+        if not rag_pipeline:
+            logger.debug("⚠️  RAG Pipeline not available, skipping vector storage")
             return
 
         try:
-            # Generate embedding
-            embedding = await embedding_service.generate(content)
+            # Create document for indexing
+            from backend.services.rag import Document
 
-            # Store in ChromaDB
-            await chromadb.add_message(
-                message_id=message_id,
-                user_id=user_id,
-                content=content,
-                embedding=embedding,
+            doc = Document(
+                id=message_id,
+                text=content,
                 metadata={
+                    "user_id": user_id,
                     "conversation_id": conversation_id,
                     "role": role,
                     "agent": agent or "none",
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "message_id": message_id
                 }
             )
 
-            logger.debug(f"✨ Stored embedding for message {message_id}")
+            # Index in RAG system
+            await rag_pipeline.index_document(doc, strategy="recursive")
+
+            logger.debug(f"✨ Stored embedding for message {message_id} in RAG system")
 
         except Exception as e:
-            logger.error(f"Failed to store embedding: {e}")
+            logger.error(f"Failed to store embedding in RAG: {e}")
 
         logger.debug(f"💾 Stored interaction for {user_id} in conversation {conversation_id}")
 
@@ -532,7 +541,9 @@ class MemoryManager:
         n_results: int = 5
     ) -> List[Dict[str, Any]]:
         """
-        Wyszukaj podobne rozmowy używając semantycznego wyszukiwania.
+        Wyszukaj podobne rozmowy używając semantycznego wyszukiwania RAG.
+
+        Używa hybrid search (BM25 + Vector) + Cohere reranking!
 
         Przykład użycia:
             results = await memory.search_similar_conversations(
@@ -549,23 +560,31 @@ class MemoryManager:
         Returns:
             Lista podobnych wiadomości z metadanymi
         """
-        embedding_service = self._get_embedding_service()
-        chromadb = self._get_chromadb()
+        rag_pipeline = self._get_rag_pipeline()
 
-        if not embedding_service or not chromadb:
-            logger.warning("Semantic search not available (ChromaDB/Embeddings disabled)")
+        if not rag_pipeline:
+            logger.warning("Semantic search not available (RAG Pipeline disabled)")
             return []
 
         try:
-            # Generate embedding for query
-            query_embedding = await embedding_service.generate(query)
-
-            # Search similar messages
-            results = await chromadb.search_similar(
-                query_embedding=query_embedding,
-                user_id=user_id,
-                n_results=n_results
+            # Search using RAG pipeline (hybrid search + reranking)
+            rag_result = await rag_pipeline.retrieve(
+                query=query,
+                top_k=n_results,
+                use_hybrid=True,
+                use_rerank=True,
+                filters={"user_id": user_id}
             )
+
+            # Convert to expected format
+            results = []
+            for doc in rag_result.documents:
+                results.append({
+                    "id": doc.id,
+                    "content": doc.text,
+                    "similarity": doc.score or 0.0,
+                    "metadata": doc.metadata
+                })
 
             return results
 
