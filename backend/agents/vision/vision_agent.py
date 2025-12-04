@@ -281,13 +281,312 @@ Odpowiadaj na pytania użytkownika dotyczące obrazu w sposób:
 
         return img_str
 
+    async def extract_document_data(self, image: Image.Image, doc_type: str = "auto") -> Dict[str, Any]:
+        """
+        Extract structured data from documents (invoices, receipts, forms)
+
+        Args:
+            image: PIL Image of document
+            doc_type: Type of document (invoice, receipt, form, auto)
+
+        Returns:
+            Structured data extracted from document
+        """
+
+        try:
+            # First do OCR to get text
+            text = pytesseract.image_to_string(image, lang='pol+eng')
+
+            # Use LLM to structure the data
+            system_prompt = f"""
+Jesteś ekspertem od analizy dokumentów. Otrzymałeś tekst wyekstraktowany z dokumentu typu: {doc_type}.
+
+Zwróć ustrukturyzowane dane w JSON:
+{{
+    "document_type": "faktura/paragon/formularz/inne",
+    "date": "YYYY-MM-DD lub null",
+    "total_amount": 0.0,
+    "currency": "PLN",
+    "vendor": "nazwa sprzedawcy",
+    "items": [
+        {{"name": "nazwa", "quantity": 1, "price": 0.0}}
+    ],
+    "additional_info": {{}}
+}}
+
+Jeśli nie możesz wyekstraktować pewnych danych, użyj null.
+"""
+
+            llm_response = await self._call_llm(
+                prompt=f"Tekst z dokumentu:\n{text}",
+                system_prompt=system_prompt
+            )
+
+            import json
+            structured_data = json.loads(llm_response)
+
+            return {
+                "success": True,
+                "data": structured_data,
+                "raw_text": text
+            }
+
+        except Exception as e:
+            logger.error(f"Document extraction error: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    async def detect_faces_and_emotions(self, image: Image.Image) -> Dict[str, Any]:
+        """
+        Detect faces and emotions in image using AI vision
+
+        Returns:
+            Information about detected faces and emotions
+        """
+
+        try:
+            image_base64 = await self._image_to_base64(image)
+
+            system_prompt = """
+Przeanalizuj obraz pod kątem obecności osób i ich emocji.
+
+Zwróć JSON:
+{
+    "faces_detected": 2,
+    "people": [
+        {
+            "description": "osoba po lewej",
+            "emotion": "szczęśliwa/smutna/neutralna/zaskoczona/zła",
+            "confidence": 0.9,
+            "details": "szczegóły"
+        }
+    ],
+    "overall_mood": "radosna atmosfera"
+}
+
+Jeśli nie ma ludzi, zwróć faces_detected: 0 i pustą listę people.
+"""
+
+            response = await self._analyze_with_vision_model(
+                image,
+                "Wykryj ludzi i ich emocje na tym obrazie",
+                image_base64,
+                system_prompt
+            )
+
+            return {
+                "success": True,
+                "analysis": response
+            }
+
+        except Exception as e:
+            logger.error(f"Face/emotion detection error: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    async def compare_images(self, image1: Image.Image, image2: Image.Image, question: str = "") -> str:
+        """
+        Compare two images and describe differences
+
+        Args:
+            image1: First image
+            image2: Second image
+            question: Specific question about the comparison
+
+        Returns:
+            Description of differences
+        """
+
+        try:
+            from backend.shared.config.settings import settings
+            import openai
+
+            client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+
+            # Convert both images to base64
+            img1_base64 = await self._image_to_base64(image1)
+            img2_base64 = await self._image_to_base64(image2)
+
+            # Prepare images with data URL format
+            if not img1_base64.startswith('data:image'):
+                img1_base64 = f"data:image/png;base64,{img1_base64}"
+            if not img2_base64.startswith('data:image'):
+                img2_base64 = f"data:image/png;base64,{img2_base64}"
+
+            prompt = question or "Porównaj te dwa obrazy. Jakie są różnice i podobieństwa?"
+
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Jesteś ekspertem od porównywania obrazów. Opisuj różnice szczegółowo ale zwięźle."
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": f"Obraz 1:"
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": img1_base64}
+                            },
+                            {
+                                "type": "text",
+                                "text": f"Obraz 2:"
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": img2_base64}
+                            },
+                            {
+                                "type": "text",
+                                "text": prompt
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=1000
+            )
+
+            result = response.choices[0].message.content
+            return f"🔍 **Porównanie obrazów:**\n\n{result}"
+
+        except Exception as e:
+            logger.error(f"Image comparison error: {e}")
+            return f"❌ Błąd podczas porównywania obrazów: {str(e)}"
+
+    async def enhance_image_analysis(self, image: Image.Image) -> Dict[str, Any]:
+        """
+        Comprehensive image analysis with multiple aspects
+
+        Returns:
+            Complete analysis including objects, colors, text, mood
+        """
+
+        analysis = {
+            "dimensions": {"width": image.width, "height": image.height},
+            "format": image.format,
+            "mode": image.mode,
+            "analysis": {}
+        }
+
+        try:
+            # Get dominant colors
+            from collections import Counter
+
+            # Resize for performance
+            img_small = image.resize((150, 150))
+            pixels = list(img_small.getdata())
+
+            # Get most common colors
+            most_common = Counter(pixels).most_common(5)
+            analysis["dominant_colors"] = [
+                {"rgb": color, "count": count}
+                for color, count in most_common
+            ]
+
+            # OCR for text detection
+            try:
+                text = pytesseract.image_to_string(image, lang='pol+eng')
+                if text.strip():
+                    analysis["text_found"] = True
+                    analysis["text_preview"] = text[:200]
+                else:
+                    analysis["text_found"] = False
+            except:
+                analysis["text_found"] = False
+
+            # AI-powered comprehensive analysis
+            image_base64 = await self._image_to_base64(image)
+
+            system_prompt = """
+Wykonaj kompleksową analizę obrazu:
+
+1. **Główny temat**: Co przedstawia obraz
+2. **Obiekty**: Kluczowe elementy
+3. **Kompozycja**: Układ, perspektywa
+4. **Kolorystyka**: Paleta, nastrój
+5. **Kontekst**: Gdzie, kiedy, dlaczego
+6. **Emocje**: Jaki wywołuje emocje
+
+Bądź szczegółowy ale zwięzły. Format: markdown.
+"""
+
+            ai_analysis = await self._analyze_with_vision_model(
+                image,
+                "Wykonaj kompleksową analizę tego obrazu",
+                image_base64,
+                system_prompt
+            )
+
+            analysis["ai_analysis"] = ai_analysis
+
+            return analysis
+
+        except Exception as e:
+            logger.error(f"Enhanced analysis error: {e}")
+            analysis["error"] = str(e)
+            return analysis
+
+    async def generate_image_prompt(self, description: str) -> str:
+        """
+        Help user create better prompts for AI image generation
+
+        Args:
+            description: User's basic description
+
+        Returns:
+            Enhanced prompt for image generation
+        """
+
+        system_prompt = """
+Jesteś ekspertem od promptów do generowania obrazów AI (DALL-E, Midjourney, Stable Diffusion).
+
+Użytkownik podał podstawowy opis. Przekształć go w szczegółowy, efektywny prompt uwzględniając:
+
+1. **Styl artystyczny**: (fotorealizm, cyfrowa sztuka, malarstwo, etc.)
+2. **Oświetlenie**: (naturalne, dramatyczne, złota godzina, etc.)
+3. **Perspektywa**: (zbliżenie, szeroki kąt, z góry, etc.)
+4. **Kolory**: (paleta, nastrój kolorystyczny)
+5. **Szczegóły**: (tekstury, elementy, atmosfera)
+6. **Referencje**: (w stylu..., podobne do...)
+
+Zwróć gotowy prompt po angielsku, zoptymalizowany dla DALL-E 3.
+"""
+
+        enhanced_prompt = await self._call_llm(
+            prompt=f"Podstawowy opis użytkownika: {description}",
+            system_prompt=system_prompt
+        )
+
+        return f"""
+🎨 **Ulepszony prompt do generowania obrazu:**
+
+```
+{enhanced_prompt}
+```
+
+💡 **Wskazówki:**
+- Możesz modyfikować prompt przed użyciem
+- Im więcej szczegółów, tym lepszy rezultat
+- Eksperymentuj ze stylami!
+"""
+
     async def can_handle(self, message: str, context: Dict) -> float:
         """Check if this agent should handle the message"""
 
         vision_keywords = [
             "obraz", "zdjęcie", "foto", "screen", "screenshot",
             "co widzisz", "przeczytaj", "tekst na", "opisz zdjęcie",
-            "image", "photo", "picture", "ocr", "read"
+            "image", "photo", "picture", "ocr", "read", "porównaj",
+            "dokument", "faktura", "paragon", "compare", "faces", "emocje"
         ]
 
         message_lower = message.lower()

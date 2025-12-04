@@ -39,6 +39,12 @@ pillow==10.2.0
 pytesseract==0.3.10
 opencv-python==4.9.0.80
 
+# Google Integrations
+google-auth==2.27.0
+google-auth-oauthlib==1.2.0
+google-auth-httplib2==0.2.0
+google-api-python-client==2.116.0
+
 # Data & Database
 sqlalchemy==2.0.25
 redis==5.0.1
