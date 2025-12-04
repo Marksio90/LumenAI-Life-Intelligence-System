@@ -1,0 +1,209 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant
+  labels:
+    app: lumenai
+    component: qdrant
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service for StatefulSet
+  ports:
+  - name: http
+    port: 6333
+    targetPort: http
+    protocol: TCP
+  - name: grpc
+    port: 6334
+    targetPort: grpc
+    protocol: TCP
+  selector:
+    app: lumenai
+    component: qdrant
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant-api
+  labels:
+    app: lumenai
+    component: qdrant
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 6333
+    targetPort: http
+    protocol: TCP
+  - name: grpc
+    port: 6334
+    targetPort: grpc
+    protocol: TCP
+  selector:
+    app: lumenai
+    component: qdrant
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: qdrant
+  labels:
+    app: lumenai
+    component: qdrant
+    version: v1.7.4
+spec:
+  serviceName: qdrant
+  replicas: 3
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: lumenai
+      component: qdrant
+  template:
+    metadata:
+      labels:
+        app: lumenai
+        component: qdrant
+        version: v1.7.4
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "6333"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      containers:
+      - name: qdrant
+        image: qdrant/qdrant:v1.7.4
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 6333
+          protocol: TCP
+        - name: grpc
+          containerPort: 6334
+          protocol: TCP
+
+        env:
+        - name: QDRANT__SERVICE__GRPC_PORT
+          value: "6334"
+        - name: QDRANT__LOG_LEVEL
+          value: "INFO"
+        - name: QDRANT__CLUSTER__ENABLED
+          value: "true"
+        - name: QDRANT__CLUSTER__P2P__PORT
+          value: "6335"
+        - name: QDRANT__STORAGE__PERFORMANCE__MAX_SEARCH_THREADS
+          value: "4"
+        - name: QDRANT__SERVICE__MAX_REQUEST_SIZE_MB
+          value: "32"
+
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        startupProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30
+
+        # Resource management
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+            ephemeral-storage: "1Gi"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+            ephemeral-storage: "5Gi"
+
+        # Security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          capabilities:
+            drop:
+            - ALL
+
+        # Volume mounts
+        volumeMounts:
+        - name: qdrant-storage
+          mountPath: /qdrant/storage
+        - name: tmp
+          mountPath: /tmp
+
+      volumes:
+      - name: tmp
+        emptyDir: {}
+
+      # Pod scheduling - spread across nodes
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: component
+                operator: In
+                values:
+                - qdrant
+            topologyKey: kubernetes.io/hostname
+
+      terminationGracePeriodSeconds: 120
+
+  # Persistent volume claim template
+  volumeClaimTemplates:
+  - metadata:
+      name: qdrant-storage
+      labels:
+        app: lumenai
+        component: qdrant
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: standard-rwo  # Adjust based on your cluster
+      resources:
+        requests:
+          storage: 50Gi
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: qdrant-pdb
+  labels:
+    app: lumenai
+    component: qdrant
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: lumenai
+      component: qdrant

@@ -1,0 +1,40 @@
+apiVersion: v2
+name: lumenai
+description: Enterprise-grade AI Life Intelligence Platform with RAG, Agent Orchestration, and Advanced Context Management
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - ai
+  - llm
+  - rag
+  - vector-database
+  - agent-orchestration
+  - intelligent-platform
+home: https://github.com/Marksio90/LumenAI-Life-Intelligence-System
+sources:
+  - https://github.com/Marksio90/LumenAI-Life-Intelligence-System
+maintainers:
+  - name: LumenAI Team
+    email: admin@lumenai.example.com
+icon: https://lumenai.example.com/logo.png
+dependencies:
+  - name: mongodb
+    version: 13.x.x
+    repository: https://charts.bitnami.com/bitnami
+    condition: mongodb.enabled
+  - name: redis
+    version: 18.x.x
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled
+  - name: cert-manager
+    version: 1.x.x
+    repository: https://charts.jetstack.io
+    condition: certManager.enabled
+  - name: ingress-nginx
+    version: 4.x.x
+    repository: https://kubernetes.github.io/ingress-nginx
+    condition: ingressNginx.enabled
+annotations:
+  category: AI/ML Platform
+  licenses: Apache-2.0

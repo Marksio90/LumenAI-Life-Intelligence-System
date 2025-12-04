@@ -1,0 +1,326 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  labels:
+    app: lumenai
+    component: mongodb
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service for StatefulSet
+  ports:
+  - name: mongodb
+    port: 27017
+    targetPort: 27017
+  selector:
+    app: lumenai
+    component: mongodb
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-api
+  labels:
+    app: lumenai
+    component: mongodb
+spec:
+  type: ClusterIP
+  ports:
+  - name: mongodb
+    port: 27017
+    targetPort: 27017
+  selector:
+    app: lumenai
+    component: mongodb
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongodb
+  labels:
+    app: lumenai
+    component: mongodb
+spec:
+  serviceName: mongodb
+  replicas: 3
+  podManagementPolicy: OrderedReady
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: lumenai
+      component: mongodb
+  template:
+    metadata:
+      labels:
+        app: lumenai
+        component: mongodb
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9216"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        fsGroup: 999
+
+      initContainers:
+      # Set proper permissions
+      - name: init-mongodb
+        image: busybox:1.36
+        command: ['sh', '-c', 'mkdir -p /data/db && chown -R 999:999 /data/db']
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+        - name: mongodb-data
+          mountPath: /data/db
+
+      containers:
+      - name: mongodb
+        image: mongo:7.0
+        imagePullPolicy: IfNotPresent
+        command:
+        - mongod
+        - --replSet=rs0
+        - --bind_ip_all
+        - --port=27017
+        - --wiredTigerCacheSizeGB=1
+        - --enableMajorityReadConcern=true
+        - --journal
+        - --storageEngine=wiredTiger
+
+        ports:
+        - name: mongodb
+          containerPort: 27017
+          protocol: TCP
+
+        env:
+        - name: MONGO_INITDB_ROOT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: lumenai-backend-secrets
+              key: MONGODB_USERNAME
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: lumenai-backend-secrets
+              key: MONGODB_PASSWORD
+        - name: MONGO_INITDB_DATABASE
+          value: "lumenai"
+
+        # Health checks
+        livenessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        # Resource management
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+
+        # Security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          capabilities:
+            drop:
+            - ALL
+
+        # Volume mounts
+        volumeMounts:
+        - name: mongodb-data
+          mountPath: /data/db
+        - name: config
+          mountPath: /etc/mongo
+        - name: tmp
+          mountPath: /tmp
+
+      # MongoDB Exporter sidecar for Prometheus
+      - name: mongodb-exporter
+        image: percona/mongodb_exporter:0.40
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: metrics
+          containerPort: 9216
+          protocol: TCP
+        env:
+        - name: MONGODB_URI
+          value: "mongodb://$(MONGO_INITDB_ROOT_USERNAME):$(MONGO_INITDB_ROOT_PASSWORD)@localhost:27017/admin"
+        - name: MONGO_INITDB_ROOT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: lumenai-backend-secrets
+              key: MONGODB_USERNAME
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: lumenai-backend-secrets
+              key: MONGODB_PASSWORD
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "10m"
+          limits:
+            memory: "256Mi"
+            cpu: "100m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          capabilities:
+            drop:
+            - ALL
+
+      volumes:
+      - name: config
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
+
+      # Pod scheduling - spread across nodes
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: component
+                operator: In
+                values:
+                - mongodb
+            topologyKey: kubernetes.io/hostname
+
+      terminationGracePeriodSeconds: 30
+
+  # Persistent volume claim template
+  volumeClaimTemplates:
+  - metadata:
+      name: mongodb-data
+      labels:
+        app: lumenai
+        component: mongodb
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: standard-rwo
+      resources:
+        requests:
+          storage: 100Gi
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mongodb-pdb
+  labels:
+    app: lumenai
+    component: mongodb
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: lumenai
+      component: mongodb
+
+---
+# MongoDB Init Job - Initializes replica set
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mongodb-init
+  labels:
+    app: lumenai
+    component: mongodb
+spec:
+  template:
+    metadata:
+      labels:
+        app: lumenai
+        component: mongodb-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: mongodb-init
+        image: mongo:7.0
+        command:
+        - /bin/bash
+        - -c
+        - |
+          # Wait for MongoDB pods to be ready
+          sleep 30
+
+          # Initialize replica set
+          mongosh --host mongodb-0.mongodb.default.svc.cluster.local:27017 \
+            -u ${MONGO_INITDB_ROOT_USERNAME} \
+            -p ${MONGO_INITDB_ROOT_PASSWORD} \
+            --eval '
+            rs.initiate({
+              _id: "rs0",
+              members: [
+                { _id: 0, host: "mongodb-0.mongodb.default.svc.cluster.local:27017" },
+                { _id: 1, host: "mongodb-1.mongodb.default.svc.cluster.local:27017" },
+                { _id: 2, host: "mongodb-2.mongodb.default.svc.cluster.local:27017" }
+              ]
+            })
+          '
+
+          # Wait for replica set to be ready
+          sleep 10
+
+          # Create database and user
+          mongosh --host mongodb-0.mongodb.default.svc.cluster.local:27017 \
+            -u ${MONGO_INITDB_ROOT_USERNAME} \
+            -p ${MONGO_INITDB_ROOT_PASSWORD} \
+            --eval '
+            use lumenai;
+            db.createUser({
+              user: "lumenai_user",
+              pwd: "'${MONGODB_PASSWORD}'",
+              roles: [
+                { role: "readWrite", db: "lumenai" },
+                { role: "dbAdmin", db: "lumenai" }
+              ]
+            })
+          '
+
+          echo "MongoDB replica set initialized successfully"
+        env:
+        - name: MONGO_INITDB_ROOT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: lumenai-backend-secrets
+              key: MONGODB_USERNAME
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: lumenai-backend-secrets
+              key: MONGODB_PASSWORD
+        - name: MONGODB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: lumenai-backend-secrets
+              key: MONGODB_PASSWORD
