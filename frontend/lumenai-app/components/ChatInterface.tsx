@@ -235,26 +235,33 @@ export default function ChatInterface() {
       <div className="flex-1 overflow-y-auto space-y-4 mb-4 scroll-smooth">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="w-20 h-20 mb-6 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
-              <span className="text-4xl">🌟</span>
+            <div className="w-24 h-24 mb-6 rounded-full bg-gradient-to-br from-purple-500 via-blue-500 to-cyan-500 flex items-center justify-center shadow-lg animate-pulse">
+              <span className="text-5xl">🌟</span>
             </div>
-            <h2 className="text-3xl font-bold gradient-text mb-3">
-              Witaj w LumenAI!
+            <h2 className="text-4xl font-bold gradient-text mb-2">
+              Witaj w LumenAI v2.0
             </h2>
-            <p className="text-gray-600 dark:text-gray-400 max-w-md mb-8">
-              Jestem Twoim osobistym asystentem życia. Mogę pomóc Ci w:
+            <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">
+              © 2025 · Twój Osobisty AI Companion
             </p>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-w-4xl">
-              <FeatureCard icon="📅" title="Planowaniu" desc="Organizacja dnia i zadań" />
-              <FeatureCard icon="💭" title="Emocjach" desc="Wsparcie psychiczne" />
-              <FeatureCard icon="🤔" title="Decyzjach" desc="Pomoc w wyborach" />
-              <FeatureCard icon="💰" title="Finansach" desc="Zarządzanie budżetem" />
-              <FeatureCard icon="👁️" title="Analizie Obrazów" desc="OCR, rozpoznawanie obiektów" />
-              <FeatureCard icon="🎤" title="Mowie i Audio" desc="Transkrypcja, synteza mowy" />
-              <FeatureCard icon="🤖" title="Automatyzacji" desc="Email, kalendarz, integracje" />
+            <p className="text-gray-600 dark:text-gray-400 max-w-lg mb-8 text-lg">
+              Jestem Twoim wielomodalnym asystentem życia, gotowy wspierać Cię w codziennych wyzwaniach:
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-w-4xl">
+              <FeatureCard icon="📅" title="Planowanie" desc="Zadania · Kalendarz · Google Calendar" />
+              <FeatureCard icon="💭" title="Wsparcie Emocjonalne" desc="CBT/DBT · Mood tracking" />
+              <FeatureCard icon="🤔" title="Decyzje" desc="Analiza scenariuszy · Pros/Cons" />
+              <FeatureCard icon="💰" title="Finanse" desc="Budżet · Wydatki · Cele" />
+              <FeatureCard icon="🔍" title="Wizja AI" desc="OCR · Dokumenty · Twarze" />
+              <FeatureCard icon="🎤" title="Głos & Audio" desc="STT · Transkrypcja" />
+              <FeatureCard icon="🤖" title="Automatyzacja" desc="Gmail · Notion · Kalendarz" />
+              <FeatureCard icon="📊" title="Analityka" desc="Trendy · Wzorce · Insights" />
             </div>
-            <p className="mt-8 text-sm text-gray-500">
-              Zacznij rozmowę - powiedz mi, w czym mogę Ci dziś pomóc!
+            <p className="mt-8 text-base font-medium text-gray-700 dark:text-gray-300">
+              💬 Jak mogę Ci dzisiaj pomóc?
+            </p>
+            <p className="mt-2 text-xs text-gray-500">
+              Napisz wiadomość, nagraj głos lub prześlij obraz →
             </p>
           </div>
         ) : (

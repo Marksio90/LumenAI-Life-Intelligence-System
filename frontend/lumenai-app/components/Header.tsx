@@ -26,12 +26,12 @@ export default function Header({ onMenuClick }: HeaderProps) {
           </button>
 
           <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 via-blue-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-md">
               <Sparkles size={20} className="text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold gradient-text">LumenAI</h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Life Intelligence System</p>
+              <h1 className="text-xl font-bold gradient-text">LumenAI <span className="text-sm text-purple-500">v2.0</span></h1>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Life Intelligence · 2025</p>
             </div>
           </div>
         </div>
