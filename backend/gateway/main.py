@@ -36,6 +36,7 @@ from backend.middleware.auth_middleware import (
     get_current_verified_user,
     get_current_superuser
 )
+from backend.middleware.rate_limit_middleware import RateLimitMiddleware, get_rate_limiter
 
 
 # Connection Manager for WebSocket
@@ -219,6 +220,14 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# Rate Limiting Middleware
+app.add_middleware(
+    RateLimitMiddleware,
+    max_requests=100,  # 100 requests per minute (global)
+    window_seconds=60,
+    exclude_paths=["/health", "/docs", "/redoc", "/openapi.json", "/"]
 )
 
 
