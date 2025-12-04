@@ -5,6 +5,8 @@ import { Send, Mic, Image as ImageIcon, Loader2, X } from 'lucide-react'
 import { useChatStore } from '@/lib/store'
 import MessageBubble from './MessageBubble'
 import TypingIndicator from './TypingIndicator'
+import { compressImage, getCompressionStats, formatBytes } from '@/lib/imageCompression'
+import { createOptimizedRecorder, formatAudioSize, createAudioFileName } from '@/lib/audioCompression'
 
 export default function ChatInterface() {
   const [input, setInput] = useState('')
@@ -56,8 +58,19 @@ export default function ChatInterface() {
     if (!isRecording) {
       // Start recording
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        const recorder = new MediaRecorder(stream)
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        })
+
+        // Create optimized recorder with better codec
+        const recorder = await createOptimizedRecorder(stream, {
+          audioBitsPerSecond: 64000 // 64kbps - good quality, small size
+        })
+
         const chunks: Blob[] = []
 
         recorder.ondataavailable = (e) => {
@@ -67,7 +80,14 @@ export default function ChatInterface() {
         }
 
         recorder.onstop = async () => {
-          const audioBlob = new Blob(chunks, { type: 'audio/webm' })
+          const audioBlob = new Blob(chunks, { type: recorder.mimeType })
+
+          // Show audio stats
+          addToast({
+            message: `🎤 Nagranie: ${formatAudioSize(audioBlob.size)}`,
+            type: 'success'
+          })
+
           await uploadAudio(audioBlob)
 
           // Stop all tracks
@@ -78,6 +98,11 @@ export default function ChatInterface() {
         setMediaRecorder(recorder)
         setIsRecording(true)
         setAudioChunks(chunks)
+
+        addToast({
+          message: '🎙️ Nagrywanie rozpoczęte - kliknij ponownie aby zakończyć',
+          type: 'success'
+        })
       } catch (err) {
         console.error('Error accessing microphone:', err)
         addToast({
@@ -99,7 +124,8 @@ export default function ChatInterface() {
 
     try {
       const formData = new FormData()
-      formData.append('file', audioBlob, 'recording.webm')
+      const fileName = createAudioFileName('voice_message')
+      formData.append('file', audioBlob, fileName)
       formData.append('user_id', userId)
       formData.append('message', input || 'Transkrybuj to nagranie')
       formData.append('language', 'pl')
@@ -152,17 +178,52 @@ export default function ChatInterface() {
     fileInputRef.current?.click()
   }
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file && file.type.startsWith('image/')) {
-      setSelectedImage(file)
+      try {
+        setIsUploading(true)
 
-      // Create preview
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string)
+        // Compress image
+        const compressedFile = await compressImage(file, {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1920,
+          quality: 0.8
+        })
+
+        // Show compression stats
+        const stats = getCompressionStats(file, compressedFile)
+        if (stats.savedPercentage > 10) {
+          addToast({
+            message: `📦 Obraz skompresowany: ${stats.originalSize} → ${stats.compressedSize} (oszczędzono ${stats.savedPercentage}%)`,
+            type: 'success'
+          })
+        }
+
+        setSelectedImage(compressedFile)
+
+        // Create preview
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          setImagePreview(reader.result as string)
+        }
+        reader.readAsDataURL(compressedFile)
+      } catch (error) {
+        console.error('Error compressing image:', error)
+        addToast({
+          message: 'Błąd podczas kompresji obrazu. Używam oryginalnego pliku.',
+          type: 'error'
+        })
+        // Fallback to original file
+        setSelectedImage(file)
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          setImagePreview(reader.result as string)
+        }
+        reader.readAsDataURL(file)
+      } finally {
+        setIsUploading(false)
       }
-      reader.readAsDataURL(file)
     }
   }
 
