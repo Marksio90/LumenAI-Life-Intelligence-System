@@ -5,12 +5,14 @@ WebSocket-enabled real-time AI assistant gateway
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from contextlib import asynccontextmanager
 from loguru import logger
 import sys
 from typing import Dict, List, Optional
 import base64
+import json
+import asyncio
 
 # Add parent directory to path
 sys.path.append('..')
@@ -314,6 +316,90 @@ async def chat(request: dict):
 
     except Exception as e:
         logger.error(f"Error in chat endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/chat/stream")
+async def chat_stream(request: dict):
+    """
+    Server-Sent Events (SSE) streaming endpoint for real-time AI responses
+    Streams response tokens as they're generated for better UX
+    """
+    try:
+        user_id = request.get("user_id")
+        message = request.get("message")
+        message_type = request.get("type", "text")
+        conversation_id = request.get("conversationId")
+
+        if not user_id or not message:
+            raise HTTPException(status_code=400, detail="user_id and message are required")
+
+        async def generate_stream():
+            """Generator function for SSE stream"""
+            try:
+                # Send start event
+                yield f"data: {json.dumps({'type': 'start', 'message': 'Generating response...'})}\n\n"
+
+                # Get response from orchestrator
+                # Note: This is a simplified version - ideally orchestrator.process_message
+                # would support streaming internally. For now, we'll simulate it.
+                response = await orchestrator.process_message(
+                    user_id=user_id,
+                    message=message,
+                    message_type=message_type
+                )
+
+                content = response.get("content", "")
+                agent = response.get("agent", "unknown")
+
+                # Simulate streaming by chunking the response
+                # In production, you'd integrate with LLM streaming APIs (OpenAI, Anthropic, etc.)
+                words = content.split()
+
+                for i, word in enumerate(words):
+                    # Send each word as a token
+                    token_data = {
+                        "type": "token",
+                        "content": word + " ",
+                        "agent": agent
+                    }
+                    yield f"data: {json.dumps(token_data)}\n\n"
+
+                    # Small delay to simulate streaming (remove in production with real streaming)
+                    await asyncio.sleep(0.03)  # 30ms between words
+
+                # Send completion event
+                complete_data = {
+                    "type": "complete",
+                    "content": content,
+                    "agent": agent,
+                    "metadata": response.get("metadata", {})
+                }
+                yield f"data: {json.dumps(complete_data)}\n\n"
+
+                # Send done signal
+                yield "data: [DONE]\n\n"
+
+            except Exception as e:
+                logger.error(f"Error in stream generation: {e}")
+                error_data = {
+                    "type": "error",
+                    "message": str(e)
+                }
+                yield f"data: {json.dumps(error_data)}\n\n"
+
+        return StreamingResponse(
+            generate_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"  # Disable nginx buffering
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error in chat stream endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
