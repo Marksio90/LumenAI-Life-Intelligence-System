@@ -2,12 +2,13 @@
 Planner Agent - Manages scheduling, tasks, calendar, and time management
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from loguru import logger
 from datetime import datetime, timedelta
 import json
 
 from backend.agents.base import BaseAgent
+from backend.services.integrations.google_calendar_service import GoogleCalendarService
 
 
 class PlannerAgent(BaseAgent):
@@ -19,12 +20,14 @@ class PlannerAgent(BaseAgent):
     - Reminders
     """
 
-    def __init__(self, memory_manager=None):
+    def __init__(self, memory_manager=None, calendar_service=None):
         super().__init__(
             name="Planner",
             description="Zarządzanie czasem, planowanie zadań i organizacja dnia",
             memory_manager=memory_manager
         )
+        self.calendar_service = calendar_service or GoogleCalendarService()
+        self.calendar_enabled = False
 
     async def process(
         self,
@@ -106,7 +109,18 @@ Odpowiedz JSON:
     async def _view_schedule(self, user_id: str, context: Dict) -> str:
         """Show user's schedule"""
 
-        # Mock schedule for now
+        # Try to use Google Calendar if available
+        if self.calendar_service:
+            try:
+                if not self.calendar_enabled:
+                    self.calendar_enabled = await self.calendar_service.authenticate()
+
+                if self.calendar_enabled:
+                    return await self.calendar_service.get_today_schedule()
+            except Exception as e:
+                logger.warning(f"Google Calendar unavailable: {e}")
+
+        # Fallback to mock schedule
         today = datetime.now()
 
         schedule = f"""
@@ -124,6 +138,8 @@ Odpowiedz JSON:
 - 21:00 - Przygotowanie do snu
 
 💡 **Podpowiedź:** Masz wolny dzień! Może warto wykorzystać go na coś kreatywnego?
+
+ℹ️ *Połącz konto Google Calendar, aby widzieć prawdziwe wydarzenia!*
 """
 
         return schedule
@@ -162,12 +178,140 @@ Mów po polsku w sposób przyjazny i motywujący.
         response = await self._call_llm(message, system_prompt)
         return response
 
+    async def add_calendar_event(
+        self,
+        summary: str,
+        start_time: datetime,
+        end_time: datetime,
+        description: str = "",
+        location: str = ""
+    ) -> Dict[str, Any]:
+        """Add event to Google Calendar"""
+
+        if not self.calendar_service:
+            return {"success": False, "error": "Calendar service not available"}
+
+        try:
+            if not self.calendar_enabled:
+                self.calendar_enabled = await self.calendar_service.authenticate()
+
+            if not self.calendar_enabled:
+                return {"success": False, "error": "Calendar authentication failed"}
+
+            event = await self.calendar_service.create_event(
+                summary=summary,
+                start_time=start_time,
+                end_time=end_time,
+                description=description,
+                location=location
+            )
+
+            if event:
+                return {
+                    "success": True,
+                    "event": event,
+                    "message": f"✅ Dodano wydarzenie: {summary}"
+                }
+            else:
+                return {"success": False, "error": "Failed to create event"}
+
+        except Exception as e:
+            logger.error(f"Error adding calendar event: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def get_week_schedule(self, user_id: str) -> str:
+        """Get schedule for the week"""
+
+        if not self.calendar_service:
+            return "📅 Kalendarz Google nie jest dostępny."
+
+        try:
+            if not self.calendar_enabled:
+                self.calendar_enabled = await self.calendar_service.authenticate()
+
+            if not self.calendar_enabled:
+                return "📅 Połącz konto Google Calendar, aby zobaczyć harmonogram tygodnia."
+
+            # Get events for next 7 days
+            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            next_week = today + timedelta(days=7)
+
+            events = await self.calendar_service.get_events(
+                time_min=today,
+                time_max=next_week,
+                max_results=50
+            )
+
+            if not events:
+                return "📅 Brak wydarzeń w najbliższym tygodniu!"
+
+            # Group events by day
+            events_by_day = {}
+            for event in events:
+                start = datetime.fromisoformat(event['start'].replace('Z', '+00:00'))
+                day_key = start.strftime('%Y-%m-%d')
+
+                if day_key not in events_by_day:
+                    events_by_day[day_key] = []
+
+                events_by_day[day_key].append({
+                    'time': start.strftime('%H:%M'),
+                    'summary': event['summary'],
+                    'location': event.get('location', '')
+                })
+
+            # Format output
+            schedule = "📅 **Twój harmonogram na tydzień:**\n\n"
+
+            for day in sorted(events_by_day.keys()):
+                day_date = datetime.fromisoformat(day)
+                schedule += f"**{day_date.strftime('%A, %d %B')}:**\n"
+
+                for event in events_by_day[day]:
+                    schedule += f"  ⏰ {event['time']} - {event['summary']}"
+                    if event['location']:
+                        schedule += f" 📍 {event['location']}"
+                    schedule += "\n"
+
+                schedule += "\n"
+
+            return schedule
+
+        except Exception as e:
+            logger.error(f"Error getting week schedule: {e}")
+            return f"❌ Błąd podczas pobierania harmonogramu: {str(e)}"
+
+    async def suggest_time_blocking(self, user_id: str, tasks: List[str]) -> str:
+        """Suggest time blocking for tasks based on calendar free time"""
+
+        system_prompt = """
+Jesteś ekspertem od time blocking i produktywności.
+
+Użytkownik podał listę zadań. Zasugeruj:
+1. Realistyczne bloki czasowe dla każdego zadania
+2. Najlepszy czas dnia dla każdego typu zadania
+3. Przerwy między zadaniami
+4. Balance między pracą a odpoczynkiem
+
+Format: czas + zadanie + uzasadnienie
+"""
+
+        tasks_str = "\n".join([f"- {task}" for task in tasks])
+
+        response = await self._call_llm(
+            prompt=f"Zadania do zaplanowania:\n{tasks_str}",
+            system_prompt=system_prompt
+        )
+
+        return f"📋 **Time Blocking Plan:**\n\n{response}"
+
     async def can_handle(self, message: str, context: Dict) -> float:
         """Check if this agent should handle the message"""
 
         keywords = [
             "plan", "zadanie", "kalendarz", "termin", "przypomnienie",
-            "harmonogram", "czas", "zorganizuj", "produktywność"
+            "harmonogram", "czas", "zorganizuj", "produktywność",
+            "schedule", "calendar", "event", "meeting", "tydzień"
         ]
 
         message_lower = message.lower()

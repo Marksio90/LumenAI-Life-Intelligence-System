@@ -89,16 +89,20 @@ Zwróć JSON:
         """Provide emotional support using CBT/DBT techniques"""
 
         emotion = emotion_analysis.get("primary_emotion", "unknown")
+        intensity = emotion_analysis.get("intensity", 0.5)
+
+        # Detect cognitive distortions
+        distortions = await self.detect_cognitive_distortions(message)
 
         system_prompt = f"""
 Jesteś empatycznym wsparciem emocjonalnym wykorzystującym techniki CBT i DBT.
 
-Użytkownik wyraża: {emotion}
+Użytkownik wyraża: {emotion} (intensywność: {intensity})
 
 Twoja odpowiedź powinna:
 1. Walidować emocje (akceptacja bez osądzania)
 2. Pokazać zrozumienie
-3. Zaproponować prostą technikę radzenia sobie (np. oddychanie, reframing, grounding)
+3. Delikatnie zwrócić uwagę na zniekształcenia poznawcze (jeśli są)
 4. Dać nadzieję, ale być realistycznym
 
 Bądź ciepły, autentyczny, konkretny. Unikaj banałów typu "będzie dobrze".
@@ -110,8 +114,21 @@ Mów po polsku naturalnie.
             system_prompt=system_prompt
         )
 
+        # Add CBT technique suggestion
+        technique = await self.suggest_cbt_technique(emotion, intensity)
+        response += f"\n\n{technique}"
+
+        # Add cognitive distortion reframe if found
+        if distortions.get("distortions_found"):
+            response += f"\n\n💭 **Zauważyłem wzorzec myślenia:**"
+            for i, (distortion, reframe) in enumerate(zip(
+                distortions.get("distortions_found", []),
+                distortions.get("reframes", [])
+            )):
+                response += f"\n• {distortion}: {reframe}"
+
         # Add mood tracking suggestion
-        tracking_prompt = "\n\n💙 *Czy chcesz, żebym śledzić Twój nastrój? Pomogę Ci zauważyć wzorce.*"
+        tracking_prompt = "\n\n💙 *Chcesz żebym śledził Twój nastrój? Pomogę Ci zauważyć wzorce.*"
 
         return response + tracking_prompt
 
@@ -202,12 +219,127 @@ Bądź naturalny, ciepły, konkretny.
 
         return insights
 
+    async def suggest_cbt_technique(self, emotion: str, intensity: float) -> str:
+        """Suggest appropriate CBT/DBT technique based on emotion"""
+
+        techniques = {
+            "anxious": {
+                "high": "🧘 **5-4-3-2-1 Grounding**: Wymień 5 rzeczy które widzisz, 4 które słyszysz, 3 które czujesz, 2 które czujesz zapachem, 1 którą czujesz smakiem.",
+                "medium": "💨 **Box Breathing**: Wdech 4s → Wstrzymaj 4s → Wydech 4s → Wstrzymaj 4s. Powtórz 4 razy.",
+                "low": "📝 **Thought Check**: Czy ten niepokój jest oparty na faktach czy domysłach?"
+            },
+            "sad": {
+                "high": "🌟 **Behavioral Activation**: Zrób małą rzecz która kiedyś sprawiała Ci radość. Nawet 5 minut.",
+                "medium": "💭 **Reframing**: Zamień 'To nigdy się nie zmieni' na 'To jest trudne teraz, ale mogę wpłynąć na małe rzeczy'.",
+                "low": "✍️ **Gratitude List**: Wymień 3 małe rzeczy za które jesteś wdzięczny dzisiaj."
+            },
+            "angry": {
+                "high": "🚶 **Physical Release**: Idź na spacer, zrób 10 przysiądów lub pokrzycz do poduszki.",
+                "medium": "⏸️ **STOP Technique**: Stop → Take a breath → Observe → Proceed mindfully",
+                "low": "🎯 **Assertive Communication**: Opisz uczucie bez oskarżania: 'Czuję się... gdy... ponieważ...'"
+            },
+            "stressed": {
+                "high": "💆 **Progressive Muscle Relaxation**: Naprężaj i rozluźniaj każdą grupę mięśni od stóp do głowy.",
+                "medium": "📋 **Brain Dump**: Wypisz wszystko co Cię stresuje. Potem kategoryzuj: co mogę kontrolować?",
+                "low": "🎵 **Sensory Break**: 5 minut muzyki/natury bez telefonu."
+            },
+            "neutral": {
+                "high": "🧘 **Mindful Check-in**: Jak się naprawdę czujesz? Gdzie czujesz to w ciele?",
+                "medium": "💪 **Value Action**: Zrób dzisiaj jedną rzecz zgodną z Twoimi wartościami.",
+                "low": "🌱 **Micro-Habit**: Jaką małą rzecz możesz zrobić dla siebie dzisiaj?"
+            }
+        }
+
+        emotion_key = emotion if emotion in techniques else "neutral"
+        intensity_key = "high" if intensity > 0.7 else "medium" if intensity > 0.4 else "low"
+
+        return techniques[emotion_key][intensity_key]
+
+    async def detect_cognitive_distortions(self, message: str) -> Dict[str, Any]:
+        """Detect cognitive distortions in user's thinking"""
+
+        system_prompt = """
+Jesteś ekspertem od CBT. Przeanalizuj wypowiedź użytkownika pod kątem zniekształceń poznawczych:
+
+1. **All-or-Nothing Thinking** (czarno-białe myślenie)
+2. **Catastrophizing** (katastrofizowanie)
+3. **Mind Reading** (czytanie w myślach)
+4. **Should Statements** (powinienem/muszę)
+5. **Overgeneralization** (nadmierne uogólnianie)
+6. **Personalization** (personalizacja)
+7. **Emotional Reasoning** (wnioskowanie z emocji)
+
+Zwróć JSON:
+{
+    "distortions_found": ["nazwa zniekształcenia"],
+    "examples": ["fragment wypowiedzi pokazujący zniekształcenie"],
+    "reframes": ["alternatywny sposób myślenia"]
+}
+
+Jeśli nie ma zniekształceń, zwróć puste listy.
+"""
+
+        try:
+            response = await self._call_llm(
+                prompt=f"Wypowiedź użytkownika: {message}",
+                system_prompt=system_prompt
+            )
+
+            import json
+            return json.loads(response)
+
+        except Exception as e:
+            logger.error(f"Cognitive distortion detection error: {e}")
+            return {"distortions_found": [], "examples": [], "reframes": []}
+
+    async def get_mood_patterns(self, user_id: str, days: int = 30) -> Dict[str, Any]:
+        """Analyze mood patterns over time"""
+
+        if not self.memory_manager:
+            return {}
+
+        try:
+            # Get mood history from MongoDB
+            stats = await self.memory_manager.get_mood_statistics(user_id, days=days)
+
+            if not stats or stats.get("total_entries") == 0:
+                return {"pattern": "insufficient_data"}
+
+            # Analyze patterns
+            patterns = {
+                "trending": "stable",
+                "most_common": stats.get("most_common_mood"),
+                "average_intensity": stats.get("average_intensity"),
+                "days_analyzed": days,
+                "total_entries": stats.get("total_entries"),
+                "recommendations": []
+            }
+
+            # Add pattern-based recommendations
+            if stats.get("average_intensity", 5) < 4:
+                patterns["trending"] = "declining"
+                patterns["recommendations"].append(
+                    "Zauważam spadek energii emocjonalnej. Rozważ rozmowę ze specjalistą lub zwiększenie aktywności fizycznej."
+                )
+            elif stats.get("average_intensity", 5) > 7:
+                patterns["trending"] = "improving"
+                patterns["recommendations"].append(
+                    "Twój nastrój się poprawia! Kontynuuj to co działa."
+                )
+
+            return patterns
+
+        except Exception as e:
+            logger.error(f"Pattern analysis error: {e}")
+            return {"pattern": "error", "message": str(e)}
+
     async def can_handle(self, message: str, context: Dict) -> float:
         """Check if this agent should handle the message"""
 
         emotional_keywords = [
             "czuję", "emocje", "nastrój", "smutek", "radość", "stres",
-            "niepokój", "lęk", "depresja", "szczęście", "płaczę", "boi"
+            "niepokój", "lęk", "depresja", "szczęście", "płaczę", "boi",
+            "worry", "anxious", "sad", "happy", "mood", "feel", "emotion"
         ]
 
         message_lower = message.lower()
