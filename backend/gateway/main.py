@@ -730,8 +730,10 @@ async def chat(request: dict):
 @app.post("/api/v1/chat/stream")
 async def chat_stream(request: dict):
     """
-    Server-Sent Events (SSE) streaming endpoint for real-time AI responses
-    Streams response tokens as they're generated for better UX
+    Server-Sent Events (SSE) streaming endpoint for real-time AI responses.
+
+    NOW WITH TRUE STREAMING! 🌊
+    Streams tokens directly from LLM APIs (OpenAI/Anthropic) as they're generated.
     """
     try:
         user_id = request.get("user_id")
@@ -743,50 +745,73 @@ async def chat_stream(request: dict):
             raise HTTPException(status_code=400, detail="user_id and message are required")
 
         async def generate_stream():
-            """Generator function for SSE stream"""
+            """Generator function for TRUE SSE streaming"""
             try:
                 # Send start event
-                yield f"data: {json.dumps({'type': 'start', 'message': 'Generating response...'})}\n\n"
+                yield f"data: {json.dumps({'type': 'start', 'message': 'Connecting to AI...'})}\n\n"
 
-                # Get response from orchestrator
-                # Note: This is a simplified version - ideally orchestrator.process_message
-                # would support streaming internally. For now, we'll simulate it.
-                response = await orchestrator.process_message(
-                    user_id=user_id,
-                    message=message,
-                    message_type=message_type
-                )
+                # Classify intent to determine agent
+                intent_result = await orchestrator.classify_intent(message)
+                agent_name = intent_result.get("agent", "cognitive")
 
-                content = response.get("content", "")
-                agent = response.get("agent", "unknown")
+                logger.info(f"🎯 Intent classified: {agent_name} for message: {message[:50]}")
 
-                # Simulate streaming by chunking the response
-                # In production, you'd integrate with LLM streaming APIs (OpenAI, Anthropic, etc.)
-                words = content.split()
+                # Get the appropriate agent
+                agent = orchestrator.agents.get(agent_name)
+                if not agent:
+                    agent = orchestrator.agents["cognitive"]  # Fallback
 
-                for i, word in enumerate(words):
-                    # Send each word as a token
+                # Get conversation context
+                context = await memory_manager.get_user_context(user_id) if memory_manager else None
+
+                # Send agent info
+                yield f"data: {json.dumps({'type': 'agent', 'agent': agent_name})}\n\n"
+
+                # TRUE STREAMING: Stream tokens directly from LLM
+                full_response = ""
+
+                async for token in orchestrator.llm_engine.generate_stream(
+                    prompt=message,
+                    system_prompt=agent.system_prompt,
+                    context=context,
+                    temperature=0.7,
+                    task_type=agent_name
+                ):
+                    # Send each token as it arrives
+                    full_response += token
+
                     token_data = {
                         "type": "token",
-                        "content": word + " ",
-                        "agent": agent
+                        "content": token,
+                        "agent": agent_name
                     }
                     yield f"data: {json.dumps(token_data)}\n\n"
 
-                    # Small delay to simulate streaming (remove in production with real streaming)
-                    await asyncio.sleep(0.03)  # 30ms between words
+                # Store conversation in memory
+                if memory_manager:
+                    await memory_manager.add_message(
+                        user_id=user_id,
+                        user_message=message,
+                        assistant_response=full_response,
+                        agent=agent_name
+                    )
 
                 # Send completion event
                 complete_data = {
                     "type": "complete",
-                    "content": content,
-                    "agent": agent,
-                    "metadata": response.get("metadata", {})
+                    "content": full_response,
+                    "agent": agent_name,
+                    "metadata": {
+                        "tokens": len(full_response.split()),
+                        "agent": agent_name
+                    }
                 }
                 yield f"data: {json.dumps(complete_data)}\n\n"
 
                 # Send done signal
                 yield "data: [DONE]\n\n"
+
+                logger.info(f"✅ Streaming complete for user {user_id}")
 
             except Exception as e:
                 logger.error(f"Error in stream generation: {e}")
