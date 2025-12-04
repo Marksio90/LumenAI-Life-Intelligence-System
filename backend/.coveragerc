@@ -1,0 +1,66 @@
+[run]
+# Coverage configuration for LumenAI backend
+
+source = .
+omit =
+    */tests/*
+    */test_*.py
+    */__pycache__/*
+    */site-packages/*
+    */venv/*
+    */env/*
+    .venv/*
+    setup.py
+    */migrations/*
+
+[report]
+# Show missing lines in coverage report
+show_missing = True
+
+# Precision for coverage percentage
+precision = 2
+
+# Sort by coverage percentage
+sort = Cover
+
+# Skip empty files
+skip_empty = True
+
+# Exclude lines from coverage
+exclude_lines =
+    # Have to re-enable the standard pragma
+    pragma: no cover
+
+    # Don't complain about missing debug-only code
+    def __repr__
+    def __str__
+
+    # Don't complain if tests don't hit defensive assertion code
+    raise AssertionError
+    raise NotImplementedError
+
+    # Don't complain if non-runnable code isn't run
+    if __name__ == .__main__.:
+
+    # Don't complain about abstract methods
+    @abstractmethod
+    @abc.abstractmethod
+
+    # Don't complain about TYPE_CHECKING blocks
+    if TYPE_CHECKING:
+    if typing.TYPE_CHECKING:
+
+    # Don't complain about ellipsis
+    \.\.\.
+
+    # Don't complain about pass statements
+    pass
+
+[html]
+# HTML coverage report configuration
+directory = htmlcov
+title = LumenAI Backend Coverage Report
+
+[xml]
+# XML coverage report (for CI/CD)
+output = coverage.xml
