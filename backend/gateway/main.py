@@ -3,7 +3,7 @@ LumenAI Gateway - Main FastAPI Application
 WebSocket-enabled real-time AI assistant gateway
 """
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, File, UploadFile, Form
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, File, UploadFile, Form, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from contextlib import asynccontextmanager
@@ -25,8 +25,17 @@ from backend.services.chromadb_service import init_chromadb_service, get_chromad
 from backend.services.embedding_service import init_embedding_service, get_embedding_service
 from backend.services.analytics_service import init_analytics_service, get_analytics_service
 from backend.services.notification_service import init_notification_service, get_notification_service
+from backend.services.auth_service import init_auth_service, get_auth_service
+from backend.services.user_repository import init_user_repository, get_user_repository
 from backend.ml.feature_engineering import FeatureEngineer
 from backend.ml.training_service import init_training_service, get_training_service
+from backend.models.user import UserCreate, UserLogin, UserPublic, UserUpdate, Token, PasswordChange
+from backend.middleware.auth_middleware import (
+    get_current_user_from_token,
+    get_current_active_user,
+    get_current_verified_user,
+    get_current_superuser
+)
 
 
 # Connection Manager for WebSocket
@@ -66,14 +75,24 @@ analytics_service = None
 notification_service = None
 feature_engineer = None
 training_service = None
+auth_service = None
+user_repository = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    global orchestrator, memory_manager, mongodb_service, chromadb_service, embedding_service, analytics_service, notification_service, feature_engineer, training_service
+    global orchestrator, memory_manager, mongodb_service, chromadb_service, embedding_service, analytics_service, notification_service, feature_engineer, training_service, auth_service, user_repository
 
     logger.info("🚀 Starting LumenAI...")
+
+    # Initialize Authentication Service
+    try:
+        auth_service = init_auth_service(secret_key=settings.SECRET_KEY)
+        logger.info("✅ Authentication Service initialized")
+    except Exception as e:
+        logger.warning(f"⚠️  Auth Service initialization failed: {e}")
+        auth_service = None
 
     # Initialize MongoDB
     try:
@@ -83,9 +102,16 @@ async def lifespan(app: FastAPI):
         )
         await mongodb_service.connect()
         logger.info("✅ MongoDB connected")
+
+        # Initialize User Repository (requires MongoDB)
+        if mongodb_service:
+            user_repository = init_user_repository(mongodb_service.db)
+            await user_repository.ensure_indexes()
+            logger.info("✅ User Repository initialized")
     except Exception as e:
         logger.warning(f"⚠️  MongoDB connection failed: {e}. Running without persistence.")
         mongodb_service = None
+        user_repository = None
 
     # Initialize ChromaDB
     try:
@@ -215,6 +241,388 @@ async def root():
         "version": settings.APP_VERSION,
         "docs": "/docs"
     }
+
+
+# ============================================================================
+# AUTHENTICATION ENDPOINTS - User Registration and Login
+# ============================================================================
+
+@app.post("/api/v1/auth/register", response_model=dict)
+async def register(user_create: UserCreate):
+    """
+    Register a new user account.
+
+    Creates a new user with hashed password and returns access token.
+
+    Example:
+        POST /api/v1/auth/register
+        Body: {
+            "email": "user@example.com",
+            "username": "john_doe",
+            "password": "SecurePassword123",
+            "full_name": "John Doe"
+        }
+
+    Response:
+        {
+            "status": "success",
+            "message": "User registered successfully",
+            "user": {...},
+            "token": {
+                "access_token": "eyJ...",
+                "token_type": "bearer",
+                "expires_in": 86400
+            }
+        }
+    """
+    try:
+        user_repo = get_user_repository()
+        if not user_repo:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="User registration unavailable. Database not connected."
+            )
+
+        # Create user
+        user = await user_repo.create_user(user_create)
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create user"
+            )
+
+        # Generate access token
+        auth = get_auth_service()
+        access_token = auth.create_access_token(user.user_id, user.email)
+        refresh_token = auth.create_refresh_token(user.user_id, user.email)
+
+        # Create public user response
+        user_public = UserPublic(**user.model_dump())
+
+        logger.info(f"✅ New user registered: {user.email}")
+
+        return {
+            "status": "success",
+            "message": "User registered successfully! Welcome to LumenAI 🌟",
+            "user": user_public.model_dump(),
+            "token": {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token_type": "bearer",
+                "expires_in": 86400  # 24 hours
+            }
+        }
+
+    except ValueError as e:
+        # User already exists or validation error
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Registration error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Registration failed. Please try again."
+        )
+
+
+@app.post("/api/v1/auth/login")
+async def login(user_login: UserLogin):
+    """
+    Login with email and password.
+
+    Validates credentials and returns access token.
+
+    Example:
+        POST /api/v1/auth/login
+        Body: {
+            "email": "user@example.com",
+            "password": "SecurePassword123"
+        }
+
+    Response:
+        {
+            "status": "success",
+            "message": "Login successful",
+            "user": {...},
+            "token": {
+                "access_token": "eyJ...",
+                "token_type": "bearer",
+                "expires_in": 86400
+            }
+        }
+    """
+    try:
+        user_repo = get_user_repository()
+        if not user_repo:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Authentication unavailable. Database not connected."
+            )
+
+        # Get user by email
+        user = await user_repo.get_user_by_email(user_login.email)
+
+        if not user:
+            logger.warning(f"Login attempt with non-existent email: {user_login.email}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password"
+            )
+
+        # Verify password
+        auth = get_auth_service()
+        if not auth.verify_password(user_login.password, user.hashed_password):
+            logger.warning(f"Failed login attempt for: {user_login.email}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password"
+            )
+
+        # Check if user is active
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account is inactive. Contact support."
+            )
+
+        # Update last login
+        await user_repo.update_last_login(user.user_id)
+
+        # Generate tokens
+        access_token = auth.create_access_token(user.user_id, user.email)
+        refresh_token = auth.create_refresh_token(user.user_id, user.email)
+
+        # Create public user response
+        user_public = UserPublic(**user.model_dump())
+
+        logger.info(f"✅ User logged in: {user.email}")
+
+        return {
+            "status": "success",
+            "message": f"Welcome back, {user.username}! 👋",
+            "user": user_public.model_dump(),
+            "token": {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token_type": "bearer",
+                "expires_in": 86400  # 24 hours
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Login failed. Please try again."
+        )
+
+
+@app.post("/api/v1/auth/refresh")
+async def refresh_token(refresh_token: str):
+    """
+    Refresh access token using refresh token.
+
+    Example:
+        POST /api/v1/auth/refresh
+        Body: {"refresh_token": "eyJ..."}
+
+    Response:
+        {
+            "access_token": "eyJ...",
+            "token_type": "bearer",
+            "expires_in": 86400
+        }
+    """
+    try:
+        auth = get_auth_service()
+        new_access_token = auth.refresh_access_token(refresh_token)
+
+        if not new_access_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired refresh token"
+            )
+
+        return {
+            "access_token": new_access_token,
+            "token_type": "bearer",
+            "expires_in": 86400
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Token refresh error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Token refresh failed"
+        )
+
+
+@app.get("/api/v1/auth/me", response_model=UserPublic)
+async def get_current_user_profile(
+    current_user: UserPublic = Depends(get_current_active_user)
+):
+    """
+    Get current authenticated user's profile.
+
+    Requires valid JWT token in Authorization header.
+
+    Example:
+        GET /api/v1/auth/me
+        Headers: {"Authorization": "Bearer eyJ..."}
+
+    Response:
+        {
+            "user_id": "user_123",
+            "email": "user@example.com",
+            "username": "john_doe",
+            ...
+        }
+    """
+    return current_user
+
+
+@app.put("/api/v1/auth/me")
+async def update_current_user_profile(
+    user_update: UserUpdate,
+    current_user = Depends(get_current_active_user)
+):
+    """
+    Update current user's profile.
+
+    Example:
+        PUT /api/v1/auth/me
+        Headers: {"Authorization": "Bearer eyJ..."}
+        Body: {
+            "full_name": "John Smith",
+            "bio": "AI enthusiast",
+            "timezone": "America/New_York"
+        }
+
+    Response:
+        {
+            "status": "success",
+            "message": "Profile updated successfully",
+            "user": {...}
+        }
+    """
+    try:
+        user_repo = get_user_repository()
+        if not user_repo:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Service unavailable"
+            )
+
+        updated_user = await user_repo.update_user(current_user.user_id, user_update)
+
+        if not updated_user:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update profile"
+            )
+
+        user_public = UserPublic(**updated_user.model_dump())
+
+        return {
+            "status": "success",
+            "message": "Profile updated successfully ✅",
+            "user": user_public.model_dump()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Profile update error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Profile update failed"
+        )
+
+
+@app.post("/api/v1/auth/change-password")
+async def change_password(
+    password_change: PasswordChange,
+    current_user = Depends(get_current_active_user)
+):
+    """
+    Change user's password.
+
+    Example:
+        POST /api/v1/auth/change-password
+        Headers: {"Authorization": "Bearer eyJ..."}
+        Body: {
+            "current_password": "OldPassword123",
+            "new_password": "NewSecurePassword456"
+        }
+
+    Response:
+        {
+            "status": "success",
+            "message": "Password changed successfully"
+        }
+    """
+    try:
+        user_repo = get_user_repository()
+        auth = get_auth_service()
+
+        if not user_repo or not auth:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Service unavailable"
+            )
+
+        # Get full user data (including hashed password)
+        user = await user_repo.get_user_by_id(current_user.user_id)
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Verify current password
+        if not auth.verify_password(password_change.current_password, user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Current password is incorrect"
+            )
+
+        # Hash new password
+        new_password_hash = auth.hash_password(password_change.new_password)
+
+        # Update password in database
+        success = await user_repo.change_password(user.user_id, new_password_hash)
+
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to change password"
+            )
+
+        logger.info(f"✅ Password changed for user: {user.email}")
+
+        return {
+            "status": "success",
+            "message": "Password changed successfully 🔒"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Password change error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Password change failed"
+        )
 
 
 # WebSocket endpoint for real-time chat
