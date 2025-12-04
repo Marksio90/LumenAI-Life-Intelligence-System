@@ -7,6 +7,7 @@ import MessageBubble from './MessageBubble'
 import TypingIndicator from './TypingIndicator'
 import { compressImage, getCompressionStats, formatBytes } from '@/lib/imageCompression'
 import { createOptimizedRecorder, formatAudioSize, createAudioFileName } from '@/lib/audioCompression'
+import { streamChatResponse, TypingEffectBuffer } from '@/lib/streamingChat'
 
 export default function ChatInterface() {
   const [input, setInput] = useState('')
@@ -16,9 +17,14 @@ export default function ChatInterface() {
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null)
   const [audioChunks, setAudioChunks] = useState<Blob[]>([])
+  const [streamingEnabled, setStreamingEnabled] = useState(true) // Enable streaming by default
+  const [streamingText, setStreamingText] = useState('')
+  const [isStreaming, setIsStreaming] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const streamingMessageIdRef = useRef<string | null>(null)
+  const typingBufferRef = useRef<TypingEffectBuffer | null>(null)
 
   const { messages, isTyping, sendMessage, connectWebSocket, userId, addMessage, addToast } = useChatStore(state => ({
     messages: state.messages,
@@ -40,11 +46,118 @@ export default function ChatInterface() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping])
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim()) return
 
-    sendMessage(input, 'text')
+    const userMessage = input
     setInput('')
+
+    // Add user message immediately
+    const userMessageObj = {
+      id: `msg_${Date.now()}`,
+      role: 'user' as const,
+      content: userMessage,
+      timestamp: new Date()
+    }
+    addMessage(userMessageObj)
+
+    // Use streaming if enabled
+    if (streamingEnabled) {
+      await handleSendStreaming(userMessage)
+    } else {
+      // Fallback to regular WebSocket
+      sendMessage(userMessage, 'text')
+    }
+  }
+
+  const handleSendStreaming = async (message: string) => {
+    setIsStreaming(true)
+    setStreamingText('')
+
+    // Create temporary streaming message
+    const streamingMsgId = `msg_stream_${Date.now()}`
+    streamingMessageIdRef.current = streamingMsgId
+
+    const streamingMsg = {
+      id: streamingMsgId,
+      role: 'assistant' as const,
+      content: '',
+      timestamp: new Date()
+    }
+    addMessage(streamingMsg)
+
+    // Initialize typing buffer
+    typingBufferRef.current = new TypingEffectBuffer((text) => {
+      setStreamingText(text)
+      // Update message in place
+      const messagesClone = [...messages]
+      const msgIndex = messagesClone.findIndex(m => m.id === streamingMsgId)
+      if (msgIndex !== -1) {
+        messagesClone[msgIndex] = {
+          ...messagesClone[msgIndex],
+          content: text
+        }
+      }
+    }, 30)
+
+    try {
+      await streamChatResponse(
+        {
+          userId,
+          message,
+          conversationId: undefined
+        },
+        {
+          onToken: (token) => {
+            typingBufferRef.current?.addToken(token)
+          },
+          onComplete: (fullResponse) => {
+            typingBufferRef.current?.stop()
+            setStreamingText(fullResponse)
+            setIsStreaming(false)
+
+            // Update final message
+            const finalMsg = {
+              id: streamingMsgId,
+              role: 'assistant' as const,
+              content: fullResponse,
+              timestamp: new Date()
+            }
+
+            // Replace streaming message with final
+            const messagesClone = [...messages]
+            const msgIndex = messagesClone.findIndex(m => m.id === streamingMsgId)
+            if (msgIndex !== -1) {
+              messagesClone[msgIndex] = finalMsg
+            }
+
+            streamingMessageIdRef.current = null
+          },
+          onError: (error) => {
+            typingBufferRef.current?.stop()
+            setIsStreaming(false)
+            console.error('Streaming error:', error)
+
+            addToast({
+              message: 'Błąd streamingu. Spróbuj ponownie.',
+              type: 'error'
+            })
+
+            // Remove failed streaming message
+            streamingMessageIdRef.current = null
+          },
+          onStart: () => {
+            // Stream starting
+          }
+        }
+      )
+    } catch (error) {
+      console.error('Failed to initiate streaming:', error)
+      setIsStreaming(false)
+
+      // Fallback to regular message
+      sendMessage(message, 'text')
+    }
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
