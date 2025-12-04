@@ -37,6 +37,8 @@ from backend.middleware.auth_middleware import (
     get_current_superuser
 )
 from backend.middleware.rate_limit_middleware import RateLimitMiddleware, get_rate_limiter
+from backend.middleware.error_middleware import register_exception_handlers
+from backend.core.exceptions import LumenAIException
 
 
 # Connection Manager for WebSocket
@@ -229,6 +231,9 @@ app.add_middleware(
     window_seconds=60,
     exclude_paths=["/health", "/docs", "/redoc", "/openapi.json", "/"]
 )
+
+# Register Exception Handlers
+register_exception_handlers(app)
 
 
 # Health Check
