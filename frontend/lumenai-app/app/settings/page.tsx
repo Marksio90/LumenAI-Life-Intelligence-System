@@ -103,12 +103,15 @@ export default function SettingsPage() {
       <div className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 p-6">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold gradient-text mb-2">⚙️ Ustawienia</h1>
-            <p className="text-gray-600 dark:text-gray-400">Zarządzaj swoim profilem i integracjami</p>
+            <h1 className="text-3xl font-bold gradient-text mb-2">⚙️ Ustawienia v2.0</h1>
+            <p className="text-gray-600 dark:text-gray-400">
+              Zarządzaj profilem, integracjami i preferencjami · Interaktywne tabs
+            </p>
+            <p className="text-xs text-gray-500 mt-1">User ID: {userId}</p>
           </div>
           <Link
             href="/"
-            className="px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all"
+            className="px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all shadow-lg"
           >
             💬 Powrót do Chatu
           </Link>
