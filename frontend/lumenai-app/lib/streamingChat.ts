@@ -11,7 +11,7 @@ export interface StreamingOptions {
 }
 
 export interface ChatStreamMessage {
-  userId: string
+  user_id: string
   message: string
   conversationId?: string
 }
