@@ -54,7 +54,7 @@ google-api-python-client==2.154.0
 sqlalchemy==2.0.36
 redis==5.2.1
 motor==3.6.0
-pymongo==4.10.1
+pymongo==4.9.1
 
 # Utilities
 python-dotenv==1.0.1
