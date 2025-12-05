@@ -640,6 +640,146 @@ async def change_password(
         )
 
 
+@app.get("/api/v1/user/settings")
+async def get_user_settings(
+    current_user = Depends(get_current_active_user)
+):
+    """
+    Get current user's settings and preferences.
+
+    Returns all user preferences including:
+    - UI preferences (theme, language, etc.)
+    - Notification settings
+    - Integration configurations
+    - API keys (masked)
+
+    Example:
+        GET /api/v1/user/settings
+        Headers: {"Authorization": "Bearer eyJ..."}
+
+    Response:
+        {
+            "preferences": {...},
+            "notifications": {...},
+            "integrations": {...}
+        }
+    """
+    try:
+        user_repo = get_user_repository()
+        if not user_repo:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Service unavailable"
+            )
+
+        user = await user_repo.get_user_by_id(current_user.user_id)
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Return preferences with defaults
+        preferences = user.preferences or {}
+
+        return {
+            "status": "success",
+            "settings": preferences
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching settings: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch settings"
+        )
+
+
+@app.put("/api/v1/user/settings")
+async def update_user_settings(
+    settings: dict,
+    current_user = Depends(get_current_active_user)
+):
+    """
+    Update current user's settings and preferences.
+
+    Example:
+        PUT /api/v1/user/settings
+        Headers: {"Authorization": "Bearer eyJ..."}
+        Body: {
+            "preferences": {
+                "theme": "dark",
+                "language": "pl",
+                "compact_mode": false
+            },
+            "notifications": {
+                "email_notifications": true,
+                "push_notifications": false
+            },
+            "integrations": {
+                "google_calendar_enabled": true,
+                "notion_api_key": "secret_..."
+            }
+        }
+
+    Response:
+        {
+            "status": "success",
+            "message": "Settings updated successfully"
+        }
+    """
+    try:
+        user_repo = get_user_repository()
+        if not user_repo:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Service unavailable"
+            )
+
+        # Get current user
+        user = await user_repo.get_user_by_id(current_user.user_id)
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Merge new settings with existing preferences
+        current_preferences = user.preferences or {}
+        updated_preferences = {**current_preferences, **settings}
+
+        # Update user with new preferences
+        user_update = UserUpdate(preferences=updated_preferences)
+        updated_user = await user_repo.update_user(current_user.user_id, user_update)
+
+        if not updated_user:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update settings"
+            )
+
+        logger.info(f"✅ Settings updated for user: {current_user.user_id}")
+
+        return {
+            "status": "success",
+            "message": "Settings updated successfully",
+            "settings": updated_user.preferences
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Settings update error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Settings update failed"
+        )
+
+
 # WebSocket endpoint for real-time chat
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):

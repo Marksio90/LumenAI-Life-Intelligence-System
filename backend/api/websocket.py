@@ -50,11 +50,11 @@ async def websocket_chat(
     streaming_service = get_streaming_service()
     memory_manager = get_memory_manager()
 
-    # Authenticate user (simplified - implement proper JWT validation)
+    # Authenticate user with JWT token
     try:
-        # TODO: Implement proper WebSocket authentication
-        user_id = "user_123"  # Replace with actual auth
-        user_data = {"user_id": user_id, "username": "demo_user"}
+        from backend.core.auth import get_current_user_ws
+        user_data = await get_current_user_ws(token)
+        user_id = user_data["user_id"]
     except Exception as e:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         logger.error(f"WebSocket authentication failed: {e}")
@@ -151,11 +151,14 @@ async def websocket_agent(
     connection_manager = get_connection_manager()
     streaming_service = get_streaming_service()
 
-    # Authenticate
+    # Authenticate with JWT token
     try:
-        user_id = "user_123"  # Replace with actual auth
+        from backend.core.auth import get_current_user_ws
+        user_data = await get_current_user_ws(token)
+        user_id = user_data["user_id"]
     except Exception as e:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        logger.error(f"WebSocket authentication failed: {e}")
         return
 
     # Connect
@@ -207,11 +210,14 @@ async def websocket_notifications(
     """
     connection_manager = get_connection_manager()
 
-    # Authenticate
+    # Authenticate with JWT token
     try:
-        user_id = "user_123"  # Replace with actual auth
+        from backend.core.auth import get_current_user_ws
+        user_data = await get_current_user_ws(token)
+        user_id = user_data["user_id"]
     except Exception as e:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        logger.error(f"WebSocket authentication failed: {e}")
         return
 
     # Connect

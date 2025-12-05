@@ -64,12 +64,56 @@ export default function SettingsPage() {
 
   const [showApiKey, setShowApiKey] = useState(false)
 
-  const handleSave = () => {
-    // TODO: Save to backend
-    addToast({
-      message: 'Ustawienia zapisane pomyślnie!',
-      type: 'success'
-    })
+  const handleSave = async () => {
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+      // Get JWT token from localStorage or your auth state
+      const token = localStorage.getItem('auth_token') // Adjust based on your auth implementation
+
+      if (!token) {
+        addToast({
+          message: 'Musisz być zalogowany, aby zapisać ustawienia',
+          type: 'error'
+        })
+        return
+      }
+
+      // Combine all settings into one object
+      const allSettings = {
+        preferences,
+        notifications,
+        integrations,
+        apiKeys
+      }
+
+      const response = await fetch(`${API_URL}/api/v1/user/settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(allSettings)
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Nie udało się zapisać ustawień')
+      }
+
+      const result = await response.json()
+
+      addToast({
+        message: 'Ustawienia zapisane pomyślnie!',
+        type: 'success'
+      })
+    } catch (error) {
+      console.error('Error saving settings:', error)
+      addToast({
+        message: error instanceof Error ? error.message : 'Błąd podczas zapisywania ustawień',
+        type: 'error'
+      })
+    }
   }
 
   const handleExportData = () => {
