@@ -4,9 +4,10 @@ Centralized configuration management using Pydantic Settings
 """
 
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, model_validator
 from typing import Optional, List
 import os
+import sys
 
 
 class Settings(BaseSettings):
@@ -23,12 +24,58 @@ class Settings(BaseSettings):
     API_PORT: int = Field(default=8000, env="API_PORT")
     API_PREFIX: str = "/api/v1"
 
-    # Security
-    SECRET_KEY: str = Field(default="change-me-in-production", env="SECRET_KEY")
+    # Security - SECRET_KEY is REQUIRED, no default value!
+    SECRET_KEY: str = Field(
+        ...,  # Required field, no default
+        env="SECRET_KEY",
+        description="Secret key for JWT token signing. MUST be set via environment variable. Minimum 32 characters."
+    )
     ALLOWED_ORIGINS: List[str] = Field(
         default=["http://localhost:3000", "http://localhost:8000"],
         env="ALLOWED_ORIGINS"
     )
+
+    @model_validator(mode='after')
+    def validate_secret_key(self):
+        """Validate SECRET_KEY strength and security"""
+        secret_key = self.SECRET_KEY
+
+        # Check minimum length
+        if len(secret_key) < 32:
+            raise ValueError(
+                f"SECRET_KEY must be at least 32 characters long (current: {len(secret_key)}). "
+                "Generate a secure key using: openssl rand -hex 32"
+            )
+
+        # Check if using common weak keys
+        weak_keys = [
+            "change-me-in-production",
+            "change-me",
+            "secret",
+            "secretkey",
+            "your-secret-key-here",
+            "12345678901234567890123456789012",  # 32 chars of sequential numbers
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",  # 32 chars of same letter
+        ]
+
+        if secret_key.lower() in weak_keys or secret_key.lower().replace("-", "") in weak_keys:
+            raise ValueError(
+                "SECRET_KEY is using a weak/common value. "
+                "Generate a secure random key using: openssl rand -hex 32"
+            )
+
+        # Warn if in production without strong key
+        if self.ENVIRONMENT == "production":
+            # Check entropy - key should have good character variety
+            unique_chars = len(set(secret_key))
+            if unique_chars < 16:  # Less than 16 unique characters is suspicious
+                print(
+                    f"⚠️  WARNING: SECRET_KEY has low entropy ({unique_chars} unique chars). "
+                    "Consider generating a new key: openssl rand -hex 32",
+                    file=sys.stderr
+                )
+
+        return self
 
     # LLM Providers
     OPENAI_API_KEY: Optional[str] = Field(default=None, env="OPENAI_API_KEY")

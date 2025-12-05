@@ -107,40 +107,22 @@ data:
   NEXT_PUBLIC_DEFAULT_THEME: "light"
 
 ---
-apiVersion: v1
-kind: Secret
-metadata:
-  name: lumenai-backend-secrets
-  labels:
-    app: lumenai
-    component: backend
-type: Opaque
-stringData:
-  # Database Credentials
-  MONGODB_USERNAME: "lumenai_user"
-  MONGODB_PASSWORD: "CHANGE_ME_IN_PRODUCTION"
-
-  # Redis Password (if using auth)
-  REDIS_PASSWORD: ""
-
-  # JWT Secrets
-  JWT_SECRET_KEY: "CHANGE_ME_IN_PRODUCTION_USE_STRONG_RANDOM_STRING"
-  JWT_REFRESH_SECRET_KEY: "CHANGE_ME_IN_PRODUCTION_USE_DIFFERENT_STRONG_RANDOM_STRING"
-
-  # API Keys
-  OPENAI_API_KEY: "sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-  COHERE_API_KEY: "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-  ANTHROPIC_API_KEY: "sk-ant-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-
-  # Google OAuth (if using)
-  GOOGLE_CLIENT_ID: "XXXXXXXX.apps.googleusercontent.com"
-  GOOGLE_CLIENT_SECRET: "XXXXXXXXXXXXXXXXXXXXXXXX"
-
-  # Qdrant API Key (if using cloud)
-  QDRANT_API_KEY: ""
-
-  # Monitoring (if using external services)
-  SENTRY_DSN: ""
+# SECURITY NOTICE:
+# ==================================================================================
+# SECRETS SHOULD NEVER BE COMMITTED TO GIT!
+#
+# This file previously contained hardcoded secrets which have been REMOVED.
+# See k8s/base/secrets-TEMPLATE.yaml for how to create secrets properly.
+#
+# To create secrets in your cluster:
+#   kubectl create secret generic lumenai-backend-secrets \
+#     --from-literal=MONGODB_PASSWORD="$(openssl rand -base64 32)" \
+#     --from-literal=JWT_SECRET_KEY="$(openssl rand -hex 64)" \
+#     --from-literal=OPENAI_API_KEY="your-actual-key" \
+#     --namespace=default
+#
+# Or use Sealed Secrets / External Secrets Operator for production.
+# ==================================================================================
 
 ---
 apiVersion: v1

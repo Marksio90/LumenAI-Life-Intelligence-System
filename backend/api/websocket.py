@@ -16,6 +16,7 @@ from backend.core.websocket_manager import get_connection_manager
 from backend.services.streaming_service import get_streaming_service
 from backend.core.auth import get_current_user_ws  # WebSocket auth helper
 from backend.core.memory import get_memory_manager
+from backend.middleware.auth_middleware import get_current_superuser  # For admin endpoints
 
 logger = logging.getLogger(__name__)
 
@@ -369,9 +370,14 @@ async def get_websocket_status():
 
 
 @router.post("/broadcast")
-async def broadcast_message(message: dict):
+async def broadcast_message(
+    message: dict,
+    current_user = Depends(get_current_superuser)
+):
     """
     Broadcast message to all connected users (admin only).
+
+    Requires: Superuser/Admin authentication
 
     Body:
     {
@@ -385,16 +391,24 @@ async def broadcast_message(message: dict):
 
     await connection_manager.broadcast({
         **message,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
+        "sender": current_user.user_id  # Track who sent the broadcast
     })
 
+    logger.info(f"Broadcast sent by admin {current_user.user_id} to {connection_manager.get_connection_count()} users")
     return {"status": "broadcasted", "user_count": connection_manager.get_connection_count()}
 
 
 @router.post("/send/{user_id}")
-async def send_to_user(user_id: str, message: dict):
+async def send_to_user(
+    user_id: str,
+    message: dict,
+    current_user = Depends(get_current_superuser)
+):
     """
     Send message to specific user (admin/system use).
+
+    Requires: Superuser/Admin authentication
 
     Path params:
     - user_id: Target user ID
@@ -409,7 +423,9 @@ async def send_to_user(user_id: str, message: dict):
 
     await connection_manager.send_to_user(user_id, {
         **message,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
+        "sender": current_user.user_id  # Track who sent the message
     })
 
+    logger.info(f"Message sent by admin {current_user.user_id} to user {user_id}")
     return {"status": "sent", "user_id": user_id}
