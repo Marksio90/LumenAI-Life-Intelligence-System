@@ -13,6 +13,7 @@ from typing import Dict, List, Optional
 import base64
 import json
 import asyncio
+from datetime import datetime, timedelta
 
 # Add parent directory to path
 sys.path.append('..')
@@ -1011,6 +1012,83 @@ async def get_mood_stats(user_id: str, days: int = 30):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/v1/user/{user_id}/mood/entries")
+async def add_mood_entry(user_id: str, mood_data: dict):
+    """
+    Add a new mood entry for user
+
+    Body:
+        {
+            "mood": "happy|sad|anxious|calm|stressed|energetic|tired",
+            "intensity": 1-10,
+            "trigger": "Optional trigger description",
+            "notes": "Optional notes"
+        }
+
+    Response:
+        {
+            "status": "success",
+            "entry": {...},
+            "message": "Mood entry saved"
+        }
+    """
+    try:
+        db = get_mongodb_service()
+
+        # Create mood entry document
+        entry = {
+            "user_id": user_id,
+            "mood": mood_data.get("mood"),
+            "intensity": mood_data.get("intensity", 5),
+            "trigger": mood_data.get("trigger"),
+            "notes": mood_data.get("notes"),
+            "timestamp": datetime.utcnow()
+        }
+
+        # Insert into database
+        mood_collection = db.db["mood_entries"]
+        result = await mood_collection.insert_one(entry)
+        entry["_id"] = str(result.inserted_id)
+
+        return {
+            "status": "success",
+            "entry": entry,
+            "message": "Mood entry saved"
+        }
+
+    except Exception as e:
+        logger.error(f"Add mood entry failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Alias endpoints for mood tracker (alternative paths)
+@app.get("/api/v1/mood/{user_id}/entries")
+async def get_mood_entries_alias(user_id: str, limit: int = 30):
+    """
+    Alias endpoint for mood entries.
+    Redirects to /api/v1/user/{user_id}/mood/history
+    """
+    return await get_mood_history(user_id, days=limit)
+
+
+@app.get("/api/v1/mood/{user_id}/stats")
+async def get_mood_stats_alias(user_id: str):
+    """
+    Alias endpoint for mood stats.
+    Redirects to /api/v1/user/{user_id}/mood/stats
+    """
+    return await get_mood_stats(user_id, days=30)
+
+
+@app.post("/api/v1/mood/{user_id}/entries")
+async def add_mood_entry_alias(user_id: str, mood_data: dict):
+    """
+    Alias endpoint for adding mood entry.
+    Redirects to /api/v1/user/{user_id}/mood/entries
+    """
+    return await add_mood_entry(user_id, mood_data)
+
+
 @app.get("/api/v1/db/health")
 async def database_health():
     """Check MongoDB connection status"""
@@ -1772,6 +1850,434 @@ async def set_budget(user_id: str, monthly_amount: float):
 
     except Exception as e:
         logger.error(f"Set budget failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/v1/finance/expenses/{user_id}/{expense_id}")
+async def delete_expense(user_id: str, expense_id: str):
+    """
+    Delete an expense entry.
+
+    Response:
+        {
+            "status": "success",
+            "message": "Expense deleted successfully"
+        }
+    """
+    try:
+        db = get_mongodb_service()
+        expenses_collection = db.db["finance_expenses"]
+
+        # Delete expense
+        result = await expenses_collection.delete_one(
+            {"expense_id": expense_id, "user_id": user_id}
+        )
+
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Expense not found")
+
+        return {
+            "status": "success",
+            "message": "Expense deleted successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Delete expense failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Alias endpoints for finance (alternative paths matching frontend expectations)
+@app.get("/api/v1/finance/{user_id}/expenses")
+async def get_expenses_alias(user_id: str, days: int = 30, category: Optional[str] = None):
+    """
+    Alias endpoint for expenses.
+    Redirects to /api/v1/finance/expenses/{user_id}
+    """
+    return await get_expenses(user_id, days=days, category=category)
+
+
+@app.post("/api/v1/finance/{user_id}/expenses")
+async def add_expense_alias(user_id: str, expense_data: dict):
+    """
+    Alias endpoint for adding expense.
+    Accepts expense data in request body.
+    """
+    return await add_expense(
+        user_id=user_id,
+        amount=expense_data.get("amount"),
+        category=expense_data.get("category"),
+        description=expense_data.get("description", ""),
+        date=expense_data.get("date")
+    )
+
+
+@app.delete("/api/v1/finance/{user_id}/expenses/{expense_id}")
+async def delete_expense_alias(user_id: str, expense_id: str):
+    """
+    Alias endpoint for deleting expense.
+    Redirects to /api/v1/finance/expenses/{user_id}/{expense_id}
+    """
+    return await delete_expense(user_id, expense_id)
+
+
+@app.get("/api/v1/finance/{user_id}/budgets")
+async def get_budgets_alias(user_id: str):
+    """
+    Alias endpoint for budget (plural form).
+    Redirects to /api/v1/finance/budget/{user_id}
+    """
+    return await get_budget(user_id)
+
+
+@app.get("/api/v1/finance/{user_id}/stats")
+async def get_finance_stats(user_id: str, days: int = 30):
+    """
+    Get financial statistics for user.
+
+    Returns:
+        - Total expenses
+        - Average daily spending
+        - Top spending categories
+        - Budget status
+
+    Response:
+        {
+            "status": "success",
+            "total_expenses": 1234.56,
+            "average_daily": 41.15,
+            "top_categories": [...],
+            "budget_status": {...}
+        }
+    """
+    try:
+        # Get expenses and budget
+        expenses_response = await get_expenses(user_id, days=days)
+        budget_response = await get_budget(user_id)
+
+        total_expenses = expenses_response.get("total_expenses", 0.0)
+        monthly_budget = budget_response.get("monthly_budget")
+
+        # Calculate stats
+        average_daily = total_expenses / days if days > 0 else 0.0
+
+        budget_status = None
+        if monthly_budget:
+            spent_percent = (total_expenses / monthly_budget * 100) if monthly_budget > 0 else 0
+            budget_status = {
+                "monthly_budget": monthly_budget,
+                "spent": total_expenses,
+                "remaining": monthly_budget - total_expenses,
+                "spent_percent": round(spent_percent, 2)
+            }
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "period_days": days,
+            "total_expenses": round(total_expenses, 2),
+            "average_daily": round(average_daily, 2),
+            "top_categories": expenses_response.get("by_category", {}),
+            "budget_status": budget_status
+        }
+
+    except Exception as e:
+        logger.error(f"Get finance stats failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# PLANNER - Task Management and Calendar
+# ============================================================================
+
+@app.get("/api/v1/planner/{user_id}/tasks")
+async def get_user_tasks(user_id: str):
+    """
+    Get all tasks for a user.
+
+    Returns list of tasks with their status, priority, and due dates.
+
+    Example:
+        GET /api/v1/planner/user_123/tasks
+
+    Response:
+        {
+            "status": "success",
+            "tasks": [
+                {
+                    "task_id": "task_123",
+                    "title": "Complete report",
+                    "description": "Finish quarterly report",
+                    "priority": "high",
+                    "status": "in_progress",
+                    "due_date": "2025-12-10T17:00:00",
+                    "category": "work",
+                    "created_at": "2025-12-05T10:00:00",
+                    "updated_at": "2025-12-05T10:00:00"
+                }
+            ]
+        }
+    """
+    try:
+        db = get_mongodb_service()
+
+        # Get tasks from database
+        tasks_collection = db.db["planner_tasks"]
+        tasks_cursor = tasks_collection.find({"user_id": user_id}).sort("created_at", -1)
+        tasks = []
+
+        async for task in tasks_cursor:
+            task["_id"] = str(task["_id"])
+            tasks.append(task)
+
+        return {
+            "status": "success",
+            "tasks": tasks
+        }
+
+    except Exception as e:
+        logger.error(f"Get tasks failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/planner/{user_id}/tasks")
+async def create_task(user_id: str, task_data: dict):
+    """
+    Create a new task for user.
+
+    Body:
+        {
+            "title": "Task title",
+            "description": "Task description",
+            "priority": "high|medium|low",
+            "due_date": "2025-12-10T17:00:00",
+            "category": "work"
+        }
+
+    Response:
+        {
+            "status": "success",
+            "task": {...},
+            "message": "Task created successfully"
+        }
+    """
+    try:
+        db = get_mongodb_service()
+
+        # Create task document
+        task_id = f"task_{user_id}_{datetime.utcnow().timestamp()}"
+        task = {
+            "task_id": task_id,
+            "user_id": user_id,
+            "title": task_data.get("title"),
+            "description": task_data.get("description"),
+            "priority": task_data.get("priority", "medium"),
+            "status": "pending",
+            "due_date": task_data.get("due_date"),
+            "category": task_data.get("category"),
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+            "completed_at": None
+        }
+
+        # Insert into database
+        tasks_collection = db.db["planner_tasks"]
+        await tasks_collection.insert_one(task)
+
+        task["_id"] = str(task["_id"])
+
+        return {
+            "status": "success",
+            "task": task,
+            "message": "Task created successfully"
+        }
+
+    except Exception as e:
+        logger.error(f"Create task failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/v1/planner/{user_id}/tasks/{task_id}")
+async def update_task(user_id: str, task_id: str, task_data: dict):
+    """
+    Update an existing task.
+
+    Body can contain any of:
+        {
+            "title": "Updated title",
+            "description": "Updated description",
+            "priority": "high|medium|low",
+            "status": "pending|in_progress|completed",
+            "due_date": "2025-12-10T17:00:00",
+            "category": "work"
+        }
+
+    Response:
+        {
+            "status": "success",
+            "task": {...},
+            "message": "Task updated successfully"
+        }
+    """
+    try:
+        db = get_mongodb_service()
+        tasks_collection = db.db["planner_tasks"]
+
+        # Prepare update data
+        update_data = {
+            "updated_at": datetime.utcnow()
+        }
+
+        # Add fields that are present in request
+        if "title" in task_data:
+            update_data["title"] = task_data["title"]
+        if "description" in task_data:
+            update_data["description"] = task_data["description"]
+        if "priority" in task_data:
+            update_data["priority"] = task_data["priority"]
+        if "status" in task_data:
+            update_data["status"] = task_data["status"]
+            # If status is completed, set completed_at
+            if task_data["status"] == "completed":
+                update_data["completed_at"] = datetime.utcnow()
+        if "due_date" in task_data:
+            update_data["due_date"] = task_data["due_date"]
+        if "category" in task_data:
+            update_data["category"] = task_data["category"]
+
+        # Update task
+        result = await tasks_collection.update_one(
+            {"task_id": task_id, "user_id": user_id},
+            {"$set": update_data}
+        )
+
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        # Get updated task
+        updated_task = await tasks_collection.find_one({"task_id": task_id})
+        updated_task["_id"] = str(updated_task["_id"])
+
+        return {
+            "status": "success",
+            "task": updated_task,
+            "message": "Task updated successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update task failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/v1/planner/{user_id}/tasks/{task_id}")
+async def delete_task(user_id: str, task_id: str):
+    """
+    Delete a task.
+
+    Response:
+        {
+            "status": "success",
+            "message": "Task deleted successfully"
+        }
+    """
+    try:
+        db = get_mongodb_service()
+        tasks_collection = db.db["planner_tasks"]
+
+        # Delete task
+        result = await tasks_collection.delete_one(
+            {"task_id": task_id, "user_id": user_id}
+        )
+
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        return {
+            "status": "success",
+            "message": "Task deleted successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Delete task failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/planner/{user_id}/calendar/events")
+async def get_calendar_events(user_id: str):
+    """
+    Get all calendar events for a user.
+
+    Returns list of calendar events.
+
+    Response:
+        {
+            "status": "success",
+            "events": [
+                {
+                    "event_id": "event_123",
+                    "title": "Team Meeting",
+                    "description": "Weekly sync",
+                    "start_time": "2025-12-06T10:00:00",
+                    "end_time": "2025-12-06T11:00:00",
+                    "location": "Conference Room A",
+                    "color": "#3b82f6"
+                }
+            ]
+        }
+    """
+    try:
+        db = get_mongodb_service()
+
+        # Get events from database
+        events_collection = db.db["planner_calendar_events"]
+        events_cursor = events_collection.find({"user_id": user_id}).sort("start_time", 1)
+        events = []
+
+        async for event in events_cursor:
+            event["_id"] = str(event["_id"])
+            events.append(event)
+
+        return {
+            "status": "success",
+            "events": events
+        }
+
+    except Exception as e:
+        logger.error(f"Get calendar events failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/planner/{user_id}/calendar/sync")
+async def sync_google_calendar(user_id: str):
+    """
+    Sync with Google Calendar.
+
+    This is a placeholder for future Google Calendar integration.
+    Currently returns a mock success response.
+
+    Response:
+        {
+            "status": "success",
+            "message": "Calendar synced successfully",
+            "events_synced": 0
+        }
+    """
+    try:
+        # TODO: Implement Google Calendar sync
+        # For now, return success message
+        return {
+            "status": "success",
+            "message": "Calendar sync feature coming soon",
+            "events_synced": 0
+        }
+
+    except Exception as e:
+        logger.error(f"Calendar sync failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

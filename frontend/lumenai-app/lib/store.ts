@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { io, Socket } from 'socket.io-client'
 
 interface Message {
   id: string
@@ -32,7 +31,7 @@ interface ChatState {
   toasts: Toast[]
   isTyping: boolean
   isConnected: boolean
-  socket: Socket | null
+  socket: WebSocket | null
   userId: string
   addMessage: (message: Message) => void
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void
@@ -138,13 +137,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
     addMessage(userMessage)
 
     // Send via WebSocket if connected
-    if (socket && socket.connected) {
-      socket.emit('message', {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({
         user_id: userId,
         message: content,
         type,
         metadata: {}
-      })
+      }))
 
       set({ isTyping: true })
     } else {
@@ -193,59 +192,58 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'
 
     try {
-      const socket = io(wsUrl, {
-        transports: ['websocket'],
-        reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000
-      })
+      // Create WebSocket connection with user_id in URL path
+      const socket = new WebSocket(`${wsUrl}/ws/${userId}`)
 
-      socket.on('connect', () => {
+      socket.onopen = () => {
         console.log('✅ WebSocket connected')
         set({ isConnected: true })
-      })
+      }
 
-      socket.on('disconnect', () => {
+      socket.onclose = () => {
         console.log('❌ WebSocket disconnected')
         set({ isConnected: false })
-      })
+      }
 
-      socket.on('message', (data) => {
-        const { addMessage, setTyping } = get()
-
-        setTyping(false)
-
-        if (data.type === 'message') {
-          const assistantMessage: Message = {
-            id: `msg_${Date.now()}`,
-            role: 'assistant',
-            content: data.content,
-            timestamp: new Date(),
-            agent: data.agent
-          }
-          addMessage(assistantMessage)
-        }
-      })
-
-      socket.on('status', (data) => {
-        if (data.status === 'typing') {
-          set({ isTyping: true })
-        }
-      })
-
-      socket.on('notification', (data) => {
-        const { addNotification } = get()
-        addNotification({
-          title: data.title || 'Nowe powiadomienie',
-          message: data.message || data.content,
-          type: data.type || 'info',
-          agent: data.agent
-        })
-      })
-
-      socket.on('error', (error) => {
+      socket.onerror = (error) => {
         console.error('WebSocket error:', error)
-      })
+        set({ isConnected: false })
+      }
+
+      socket.onmessage = (event) => {
+        const { addMessage, setTyping, addNotification } = get()
+
+        try {
+          const data = JSON.parse(event.data)
+
+          setTyping(false)
+
+          // Handle different message types
+          if (data.type === 'message') {
+            const assistantMessage: Message = {
+              id: `msg_${Date.now()}`,
+              role: 'assistant',
+              content: data.content,
+              timestamp: new Date(),
+              agent: data.agent
+            }
+            addMessage(assistantMessage)
+          } else if (data.type === 'status') {
+            if (data.status === 'typing') {
+              set({ isTyping: true })
+            }
+          } else if (data.type === 'notification') {
+            addNotification({
+              title: data.title || 'Nowe powiadomienie',
+              message: data.message || data.content,
+              type: data.type || 'info',
+              agent: data.agent
+            })
+          }
+        } catch (err) {
+          console.error('Error parsing WebSocket message:', err)
+        }
+      }
 
       set({ socket })
     } catch (error) {
@@ -257,7 +255,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   disconnectWebSocket: () => {
     const { socket } = get()
     if (socket) {
-      socket.disconnect()
+      socket.close()
       set({ socket: null, isConnected: false })
     }
   },

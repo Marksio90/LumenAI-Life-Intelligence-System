@@ -103,7 +103,7 @@ export default function ChatInterface() {
     try {
       await streamChatResponse(
         {
-          userId,
+          user_id: userId,
           message,
           conversationId: undefined
         },
