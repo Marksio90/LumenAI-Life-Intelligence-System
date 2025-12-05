@@ -66,10 +66,14 @@ class MongoDBService:
         """
         try:
             logger.info(f"Łączenie z MongoDB: {self.connection_string}")
-            # Add timeout to prevent hanging
+            # Add timeout to prevent hanging and connection pool limits
             self.client = AsyncIOMotorClient(
                 self.connection_string,
-                serverSelectionTimeoutMS=3000  # 3 second timeout
+                serverSelectionTimeoutMS=3000,  # 3 second timeout
+                maxPoolSize=50,  # Maximum 50 connections in pool
+                minPoolSize=10,  # Keep minimum 10 connections ready
+                maxIdleTimeMS=45000,  # Close idle connections after 45 seconds
+                waitQueueTimeoutMS=10000  # Wait max 10 seconds for connection from pool
             )
             self.db = self.client[self.database_name]
 

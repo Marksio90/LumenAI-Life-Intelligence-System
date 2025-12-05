@@ -19,11 +19,12 @@ class MoodAgent(BaseAgent):
     - Stress management
     """
 
-    def __init__(self, memory_manager=None):
+    def __init__(self, memory_manager=None, llm_engine=None):
         super().__init__(
             name="Mood",
             description="Wsparcie emocjonalne, zdrowie psychiczne i zarządzanie nastrojem",
-            memory_manager=memory_manager
+            memory_manager=memory_manager,
+            llm_engine=llm_engine
         )
 
     async def process(

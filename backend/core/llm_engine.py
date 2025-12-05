@@ -9,10 +9,15 @@ from loguru import logger
 import os
 import hashlib
 import json
+import asyncio
+from cachetools import TTLCache
 
 from backend.shared.config.settings import settings
 from backend.core.cost_tracker import cost_tracker
 from backend.core.model_router import model_router
+
+# Timeout for external API calls (30 seconds)
+LLM_API_TIMEOUT = 30.0
 
 
 class LLMEngine:
@@ -33,8 +38,10 @@ class LLMEngine:
         self.model = model or settings.DEFAULT_MODEL
         self.use_smart_routing = use_smart_routing and settings.ENABLE_SMART_ROUTING
 
-        # Cache for responses (simple in-memory cache)
-        self.cache = {} if settings.ENABLE_RESPONSE_CACHE else None
+        # Cache for responses with TTL and size limits
+        # maxsize=1000: Maximum 1000 cached responses
+        # ttl=3600: Cache entries expire after 1 hour (3600 seconds)
+        self.cache = TTLCache(maxsize=1000, ttl=3600) if settings.ENABLE_RESPONSE_CACHE else None
 
         self._initialize_client()
 
@@ -182,7 +189,15 @@ class LLMEngine:
         if response_format == "json":
             kwargs["response_format"] = {"type": "json_object"}
 
-        response = await self.client.chat.completions.create(**kwargs)
+        # API call with timeout protection
+        try:
+            response = await asyncio.wait_for(
+                self.client.chat.completions.create(**kwargs),
+                timeout=LLM_API_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"OpenAI API timeout after {LLM_API_TIMEOUT}s for model: {model}")
+            raise Exception(f"LLM API request timed out after {LLM_API_TIMEOUT} seconds")
 
         # Track cost
         usage = response.usage
@@ -219,13 +234,21 @@ class LLMEngine:
         # Current message
         messages.append({"role": "user", "content": prompt})
 
-        response = await self.client.messages.create(
-            model=model,  # Use selected model
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system_prompt or "",
-            messages=messages
-        )
+        # API call with timeout protection
+        try:
+            response = await asyncio.wait_for(
+                self.client.messages.create(
+                    model=model,  # Use selected model
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    system=system_prompt or "",
+                    messages=messages
+                ),
+                timeout=LLM_API_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"Anthropic API timeout after {LLM_API_TIMEOUT}s for model: {model}")
+            raise Exception(f"LLM API request timed out after {LLM_API_TIMEOUT} seconds")
 
         # Track cost
         usage = response.usage

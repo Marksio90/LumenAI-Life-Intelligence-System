@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 sys.path.append('..')
 
 from backend.shared.config.settings import settings
+from backend.shared.validators import validate_mongodb_id, validate_mongodb_string
 from backend.core.orchestrator import Orchestrator
 from backend.core.memory import MemoryManager
 from backend.services.mongodb_service import init_mongodb_service, get_mongodb_service
@@ -1136,6 +1137,9 @@ async def get_conversation_messages(conversation_id: str, limit: int = 100):
     NEW FEATURE: Full conversation history from MongoDB! 💬
     """
     try:
+        # Validate conversation_id to prevent NoSQL injection
+        conversation_id = validate_mongodb_id(conversation_id, "conversation_id")
+
         db = get_mongodb_service()
         messages = await db.get_conversation_messages(conversation_id, limit=limit)
 
@@ -1362,6 +1366,10 @@ async def search_conversations(user_id: str, query: str, n_results: int = 10):
         }
     """
     try:
+        # Validate inputs to prevent NoSQL injection
+        user_id = validate_mongodb_id(user_id, "user_id")
+        query = validate_mongodb_string(query, "query", max_length=500)
+
         results = await memory_manager.search_similar_conversations(
             user_id=user_id,
             query=query,
@@ -1474,6 +1482,9 @@ async def summarize_conversation(conversation_id: str, max_length: int = 200):
         }
     """
     try:
+        # Validate conversation_id to prevent NoSQL injection
+        conversation_id = validate_mongodb_id(conversation_id, "conversation_id")
+
         analytics = get_analytics_service()
         if not analytics:
             raise HTTPException(status_code=503, detail="Analytics service not available")

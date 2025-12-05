@@ -39,13 +39,13 @@ class Orchestrator:
             from backend.agents.automation.automation_agent import AutomationAgent
 
             self.agents = {
-                "planner": PlannerAgent(memory_manager=self.memory_manager),
-                "mood": MoodAgent(memory_manager=self.memory_manager),
-                "decision": DecisionAgent(memory_manager=self.memory_manager),
-                "vision": VisionAgent(memory_manager=self.memory_manager),
-                "speech": SpeechAgent(memory_manager=self.memory_manager),
-                "finance": FinanceAgent(memory_manager=self.memory_manager),
-                "automation": AutomationAgent(memory_manager=self.memory_manager),
+                "planner": PlannerAgent(memory_manager=self.memory_manager, llm_engine=self.llm_engine),
+                "mood": MoodAgent(memory_manager=self.memory_manager, llm_engine=self.llm_engine),
+                "decision": DecisionAgent(memory_manager=self.memory_manager, llm_engine=self.llm_engine),
+                "vision": VisionAgent(memory_manager=self.memory_manager, llm_engine=self.llm_engine),
+                "speech": SpeechAgent(memory_manager=self.memory_manager, llm_engine=self.llm_engine),
+                "finance": FinanceAgent(memory_manager=self.memory_manager, llm_engine=self.llm_engine),
+                "automation": AutomationAgent(memory_manager=self.memory_manager, llm_engine=self.llm_engine),
             }
 
             logger.info(f"✅ Initialized {len(self.agents)} agents: {list(self.agents.keys())}")
