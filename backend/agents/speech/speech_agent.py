@@ -21,11 +21,12 @@ class SpeechAgent(BaseAgent):
     - Audio transcription
     """
 
-    def __init__(self, memory_manager=None):
+    def __init__(self, memory_manager=None, llm_engine=None):
         super().__init__(
             name="Speech",
             description="Transkrypcja mowy na tekst i synteza głosu",
-            memory_manager=memory_manager
+            memory_manager=memory_manager,
+            llm_engine=llm_engine
         )
 
         # Supported audio formats

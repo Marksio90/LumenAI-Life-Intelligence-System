@@ -21,11 +21,12 @@ class AutomationAgent(BaseAgent):
     - File operations
     """
 
-    def __init__(self, memory_manager=None):
+    def __init__(self, memory_manager=None, llm_engine=None):
         super().__init__(
             name="Automation",
             description="Automatyzacja zadań, integracje z zewnętrznymi API",
-            memory_manager=memory_manager
+            memory_manager=memory_manager,
+            llm_engine=llm_engine
         )
 
         # Available integrations (would be configured via env vars in production)

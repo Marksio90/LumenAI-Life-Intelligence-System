@@ -13,10 +13,11 @@ class BaseAgent(ABC):
     Abstract base class for all LumenAI agents
     """
 
-    def __init__(self, name: str, description: str, memory_manager=None):
+    def __init__(self, name: str, description: str, memory_manager=None, llm_engine=None):
         self.name = name
         self.description = description
         self.memory_manager = memory_manager  # Optional: allows agents to access memory
+        self.llm_engine = llm_engine  # Optional: shared LLM engine instance
         logger.info(f"🤖 Agent '{name}' initialized")
 
     @abstractmethod
@@ -58,11 +59,19 @@ class BaseAgent(ABC):
 
     async def _call_llm(self, prompt: str, system_prompt: Optional[str] = None) -> str:
         """
-        Helper method to call LLM
-        """
-        from backend.core.llm_engine import LLMEngine
+        Helper method to call LLM using shared engine instance
 
-        llm = LLMEngine()
+        Uses the shared llm_engine if provided, otherwise creates a new one
+        (for backward compatibility)
+        """
+        if self.llm_engine:
+            # Use shared engine (preferred - avoids blocking in async)
+            llm = self.llm_engine
+        else:
+            # Fallback: create new instance (for backward compatibility)
+            from backend.core.llm_engine import LLMEngine
+            llm = LLMEngine()
+
         return await llm.generate(prompt=prompt, system_prompt=system_prompt)
 
     def __repr__(self):

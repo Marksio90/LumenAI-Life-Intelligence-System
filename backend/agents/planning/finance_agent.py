@@ -20,11 +20,12 @@ class FinanceAgent(BaseAgent):
     - Spending insights
     """
 
-    def __init__(self, memory_manager=None):
+    def __init__(self, memory_manager=None, llm_engine=None):
         super().__init__(
             name="Finance",
             description="Zarządzanie finansami, budżet, wydatki i oszczędności",
-            memory_manager=memory_manager
+            memory_manager=memory_manager,
+            llm_engine=llm_engine
         )
 
         # Expense categories

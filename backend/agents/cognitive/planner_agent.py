@@ -20,11 +20,12 @@ class PlannerAgent(BaseAgent):
     - Reminders
     """
 
-    def __init__(self, memory_manager=None, calendar_service=None):
+    def __init__(self, memory_manager=None, calendar_service=None, llm_engine=None):
         super().__init__(
             name="Planner",
             description="Zarządzanie czasem, planowanie zadań i organizacja dnia",
-            memory_manager=memory_manager
+            memory_manager=memory_manager,
+            llm_engine=llm_engine
         )
         self.calendar_service = calendar_service or GoogleCalendarService()
         self.calendar_enabled = False

@@ -22,11 +22,12 @@ class VisionAgent(BaseAgent):
     - Image understanding with GPT-4V
     """
 
-    def __init__(self, memory_manager=None):
+    def __init__(self, memory_manager=None, llm_engine=None):
         super().__init__(
             name="Vision",
             description="Analiza obrazów, OCR, rozpoznawanie obiektów i scen",
-            memory_manager=memory_manager
+            memory_manager=memory_manager,
+            llm_engine=llm_engine
         )
 
         # Try to set tesseract path for different environments
