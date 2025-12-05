@@ -229,8 +229,27 @@ async def delete_file(
 
     - **file_id**: File identifier
     """
-    # TODO: Implement file deletion
-    return {
-        "message": "File deletion not yet implemented",
-        "file_id": file_id
-    }
+    file_service = get_file_processing_service()
+    user_id = user["user_id"]
+
+    try:
+        result = await file_service.delete_file(
+            file_id=file_id,
+            user_id=user_id
+        )
+
+        logger.info(f"File deleted: user={user_id}, file_id={file_id}")
+        return result
+
+    except FileNotFoundError as e:
+        logger.warning(f"File not found: {file_id}, user={user_id}")
+        raise HTTPException(
+            status_code=404,
+            detail=f"File not found: {file_id}"
+        )
+    except Exception as e:
+        logger.error(f"File deletion error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error deleting file: {str(e)}"
+        )

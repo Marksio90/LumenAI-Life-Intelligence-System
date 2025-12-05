@@ -452,6 +452,66 @@ class FileProcessingService:
             logger.error(f"Error searching files: {e}")
             return []
 
+    async def delete_file(
+        self,
+        file_id: str,
+        user_id: str
+    ) -> Dict[str, Any]:
+        """
+        Delete a file from storage and RAG index.
+
+        Args:
+            file_id: File ID to delete
+            user_id: User ID (for security verification)
+
+        Returns:
+            Deletion result with status
+
+        Raises:
+            FileNotFoundError: If file doesn't exist
+        """
+        # Find file by searching all extensions in user directory
+        user_dir = self.upload_dir / user_id
+
+        if not user_dir.exists():
+            raise FileNotFoundError(f"No files found for user {user_id}")
+
+        # Search for file with this ID (any extension)
+        found_file = None
+        for file_path in user_dir.iterdir():
+            if file_path.is_file() and file_path.stem == file_id:
+                found_file = file_path
+                break
+
+        if not found_file:
+            raise FileNotFoundError(f"File {file_id} not found")
+
+        # Delete from filesystem
+        try:
+            found_file.unlink()
+            logger.info(f"Deleted file: file_id={file_id}, user={user_id}, path={found_file}")
+        except Exception as e:
+            logger.error(f"Error deleting file {file_id}: {e}")
+            raise
+
+        # Try to remove from RAG index (best effort)
+        rag_pipeline = self._get_rag_pipeline()
+        if rag_pipeline:
+            try:
+                # RAG systems typically index by file_id
+                await rag_pipeline.delete_documents(
+                    filters={"file_id": file_id, "user_id": user_id}
+                )
+                logger.info(f"Removed file {file_id} from RAG index")
+            except Exception as e:
+                logger.warning(f"Could not remove file from RAG index: {e}")
+
+        return {
+            "file_id": file_id,
+            "deleted": True,
+            "deleted_at": datetime.utcnow().isoformat()
+        }
+
     def cleanup_old_files(self, older_than_days: int = 30):
         """
         Clean up old uploaded files.
