@@ -781,11 +781,34 @@ async def update_user_settings(
 
 
 # WebSocket endpoint for real-time chat
-@app.websocket("/ws/{user_id}")
-async def websocket_endpoint(websocket: WebSocket, user_id: str):
+@app.websocket("/ws/chat")
+async def websocket_endpoint(
+    websocket: WebSocket,
+    token: str = Query(..., description="JWT authentication token")
+):
     """
     WebSocket endpoint for real-time bidirectional communication + notifications
+
+    Authentication: Requires valid JWT token as query parameter
+    Example: ws://localhost:8000/ws/chat?token=YOUR_JWT_TOKEN
+
+    Security: User identity is derived from JWT token, not URL parameter
     """
+    # Authenticate user with JWT token BEFORE accepting connection
+    try:
+        from backend.core.auth import get_current_user_ws
+        user_data = await get_current_user_ws(token)
+        user_id = user_data["user_id"]
+        logger.info(f"WebSocket authentication successful for user: {user_id}")
+    except HTTPException as e:
+        logger.error(f"WebSocket authentication failed: {e.detail}")
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    except Exception as e:
+        logger.error(f"WebSocket authentication error: {e}")
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
     await manager.connect(websocket, user_id)
 
     # Register notification callback for real-time push
@@ -1002,20 +1025,32 @@ async def get_user_history(user_id: str, limit: int = 50):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.delete("/api/v1/user/{user_id}/memory")
-async def clear_user_memory(user_id: str):
-    """Clear user's memory (privacy feature)"""
+@app.delete("/api/v1/user/memory")
+async def clear_user_memory(current_user = Depends(get_current_active_user)):
+    """
+    Clear current user's memory (privacy feature)
+
+    Requires: Active user authentication
+    Security: Users can only delete their own memory
+    """
     try:
+        user_id = current_user.user_id
         await memory_manager.clear_user_memory(user_id)
-        return {"status": "success", "message": f"Memory cleared for user {user_id}"}
+        logger.info(f"Memory cleared for user {user_id}")
+        return {"status": "success", "message": f"Memory cleared successfully"}
     except Exception as e:
         logger.error(f"Error clearing memory: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.get("/api/v1/stats/costs")
-async def get_cost_stats():
-    """Get LLM API cost statistics"""
+async def get_cost_stats(current_user = Depends(get_current_superuser)):
+    """
+    Get LLM API cost statistics
+
+    Requires: Superuser/Admin authentication
+    Security: Cost data is sensitive business information
+    """
     try:
         from backend.core.cost_tracker import cost_tracker
         stats = cost_tracker.get_stats()
@@ -1026,6 +1061,7 @@ async def get_cost_stats():
                 requests_per_day=100
             )
 
+        logger.info(f"Cost stats accessed by admin {current_user.user_id}")
         return {
             "status": "success",
             "data": stats,
@@ -1033,21 +1069,28 @@ async def get_cost_stats():
         }
     except Exception as e:
         logger.error(f"Error fetching cost stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
 # NEW: MongoDB-powered endpoints
 # ============================================================================
 
-@app.get("/api/v1/user/{user_id}/conversations")
-async def get_user_conversations(user_id: str, limit: int = 20, skip: int = 0):
+@app.get("/api/v1/user/conversations")
+async def get_user_conversations(
+    limit: int = 20,
+    skip: int = 0,
+    current_user = Depends(get_current_active_user)
+):
     """
-    Get user's conversations with MongoDB persistence
+    Get current user's conversations with MongoDB persistence
 
+    Requires: Active user authentication
+    Security: Users can only access their own conversations
     NEW FEATURE: Conversations now persist across restarts! 🎉
     """
     try:
+        user_id = current_user.user_id
         db = get_mongodb_service()
         conversations = await db.get_user_conversations(user_id, limit=limit, skip=skip)
 
@@ -1070,7 +1113,7 @@ async def get_user_conversations(user_id: str, limit: int = 20, skip: int = 0):
         }
     except Exception as e:
         logger.error(f"Error fetching conversations: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.get("/api/v1/conversation/{conversation_id}/messages")
@@ -1109,14 +1152,20 @@ async def get_conversation_messages(conversation_id: str, limit: int = 100):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/v1/user/{user_id}/mood/history")
-async def get_mood_history(user_id: str, days: int = 7):
+@app.get("/api/v1/user/mood/history")
+async def get_mood_history(
+    days: int = 7,
+    current_user = Depends(get_current_active_user)
+):
     """
-    Get user's mood history
+    Get current user's mood history
 
+    Requires: Active user authentication
+    Security: Users can only access their own sensitive mood data
     NEW FEATURE: Mood tracking with MongoDB! 😊
     """
     try:
+        user_id = current_user.user_id
         mood_history = await memory_manager.get_mood_history(user_id, days=days)
 
         return {
@@ -1128,17 +1177,23 @@ async def get_mood_history(user_id: str, days: int = 7):
         }
     except Exception as e:
         logger.error(f"Error fetching mood history: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get("/api/v1/user/{user_id}/mood/stats")
-async def get_mood_stats(user_id: str, days: int = 30):
+@app.get("/api/v1/user/mood/stats")
+async def get_mood_stats(
+    days: int = 30,
+    current_user = Depends(get_current_active_user)
+):
     """
-    Get mood statistics and insights
+    Get mood statistics and insights for current user
 
+    Requires: Active user authentication
+    Security: Mood data is highly sensitive personal information
     NEW FEATURE: Analyze mood patterns! 📊
     """
     try:
+        user_id = current_user.user_id
         stats = await memory_manager.get_mood_statistics(user_id, days=days)
 
         return {
