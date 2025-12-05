@@ -30,7 +30,7 @@ from backend.services.auth_service import init_auth_service, get_auth_service
 from backend.services.user_repository import init_user_repository, get_user_repository
 from backend.ml.feature_engineering import FeatureEngineer
 from backend.ml.training_service import init_training_service, get_training_service
-from backend.models.user import UserCreate, UserLogin, UserPublic, UserUpdate, Token, PasswordChange
+from backend.models.user import UserCreate, UserLogin, UserPublic, UserUpdate, Token, PasswordChange, UserSettingsUpdate
 from backend.middleware.auth_middleware import (
     get_current_user_from_token,
     get_current_active_user,
@@ -700,11 +700,14 @@ async def get_user_settings(
 
 @app.put("/api/v1/user/settings")
 async def update_user_settings(
-    settings: dict,
+    settings: UserSettingsUpdate,  # Now using validated Pydantic model
     current_user = Depends(get_current_active_user)
 ):
     """
     Update current user's settings and preferences.
+
+    Security: All inputs are validated against strict schema
+    Unknown fields are rejected to prevent injection attacks
 
     Example:
         PUT /api/v1/user/settings
@@ -717,11 +720,8 @@ async def update_user_settings(
             },
             "notifications": {
                 "email_notifications": true,
-                "push_notifications": false
-            },
-            "integrations": {
-                "google_calendar_enabled": true,
-                "notion_api_key": "secret_..."
+                "push_notifications": false,
+                "notification_frequency": "daily"
             }
         }
 
@@ -748,12 +748,24 @@ async def update_user_settings(
                 detail="User not found"
             )
 
-        # Merge new settings with existing preferences
+        # Get current preferences
         current_preferences = user.preferences or {}
-        updated_preferences = {**current_preferences, **settings}
 
-        # Update user with new preferences
-        user_update = UserUpdate(preferences=updated_preferences)
+        # Merge new validated settings
+        if settings.preferences:
+            current_preferences.setdefault('preferences', {})
+            current_preferences['preferences'].update(
+                settings.preferences.model_dump(exclude_none=True)
+            )
+
+        if settings.notifications:
+            current_preferences.setdefault('notifications', {})
+            current_preferences['notifications'].update(
+                settings.notifications.model_dump(exclude_none=True)
+            )
+
+        # Update user with validated preferences
+        user_update = UserUpdate(preferences=current_preferences)
         updated_user = await user_repo.update_user(current_user.user_id, user_update)
 
         if not updated_user:
@@ -776,7 +788,7 @@ async def update_user_settings(
         logger.error(f"Settings update error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Settings update failed"
+            detail="Internal server error"  # Don't leak error details
         )
 
 
