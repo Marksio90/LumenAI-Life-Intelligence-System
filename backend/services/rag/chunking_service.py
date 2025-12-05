@@ -15,10 +15,18 @@ from dataclasses import dataclass
 from enum import Enum
 import hashlib
 
-from langchain.text_splitter import (
-    RecursiveCharacterTextSplitter,
-    TokenTextSplitter
-)
+try:
+    # Try langchain v0.3+ import structure
+    from langchain_text_splitters import (
+        RecursiveCharacterTextSplitter,
+        TokenTextSplitter
+    )
+except ImportError:
+    # Fallback to older langchain import structure
+    from langchain.text_splitter import (
+        RecursiveCharacterTextSplitter,
+        TokenTextSplitter
+    )
 import tiktoken
 
 from backend.core.logging_config import get_logger
