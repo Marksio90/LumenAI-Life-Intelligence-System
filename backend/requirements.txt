@@ -15,7 +15,7 @@ langchain-community==0.3.13
 langchain-core==0.3.28
 langchain-openai==0.2.14
 llama-index==0.9.48
-openai==1.57.2
+openai==1.58.1
 anthropic==0.39.0
 cohere==5.20.0
 tiktoken==0.12.0
