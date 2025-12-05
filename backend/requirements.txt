@@ -1,8 +1,8 @@
 # Core Framework
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-pydantic==2.5.3
-pydantic-settings==2.1.0
+fastapi==0.115.0
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+pydantic-settings==2.6.1
 python-multipart==0.0.6
 
 # WebSocket & Real-time
@@ -10,66 +10,64 @@ websockets==12.0
 python-socketio==5.11.0
 
 # LLM & AI Frameworks
-langchain==1.1.1
-langchain-community==0.0.38
-langchain-core==1.1.0
-langchain-openai==1.1.0
+langchain==0.3.13
+langchain-community==0.3.13
+langchain-core==0.3.28
+langchain-openai==0.2.14
 llama-index==0.9.48
-openai==2.8.1
-anthropic==0.8.1
+openai==1.57.2
+anthropic==0.39.0
 cohere==5.20.0
 tiktoken==0.12.0
 
 # Vector Database & RAG
-qdrant-client==1.16.1
-chromadb==0.4.22
-pinecone-client==3.0.2
-sentence-transformers==2.3.1
+qdrant-client==1.12.1
+chromadb==0.5.23
+pinecone-client==5.0.1
+sentence-transformers==3.3.1
 rank-bm25==0.2.2
 
 # Machine Learning
-torch==2.1.2
-scikit-learn==1.4.0
-transformers==4.37.2
-catboost==1.2.2
+torch==2.5.1
+scikit-learn==1.6.0
+transformers==4.47.1
+catboost==1.2.7
 
 # Audio Processing (STT/TTS)
-openai-whisper==20231117
+openai-whisper==20240930
 soundfile==0.12.1
 pydub==0.25.1
-gtts==2.5.0
+gtts==2.5.4
 
 # Vision & OCR
-pillow==10.2.0
-pytesseract==0.3.10
-opencv-python==4.9.0.80
+pillow==11.0.0
+pytesseract==0.3.13
+opencv-python==4.10.0.84
 
 # Google Integrations
-google-auth==2.27.0
-google-auth-oauthlib==1.2.0
+google-auth==2.37.0
+google-auth-oauthlib==1.2.1
 google-auth-httplib2==0.2.0
-google-api-python-client==2.116.0
+google-api-python-client==2.154.0
 
 # Data & Database
-sqlalchemy==2.0.25
-redis==5.0.1
-motor==3.3.2
-pymongo==4.6.1
+sqlalchemy==2.0.36
+redis==5.2.1
+motor==3.6.0
+pymongo==4.10.1
 
 # Utilities
-python-dotenv==1.0.0
-httpx==0.26.0
-aiohttp==3.9.3
-requests==2.31.0
+python-dotenv==1.0.1
+httpx==0.28.1
+aiohttp==3.11.10
+requests==2.32.3
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-python-multipart==0.0.6
 
 # Monitoring & Logging
-prometheus-client==0.19.0
-loguru==0.7.2
+prometheus-client==0.21.0
+loguru==0.7.3
 
 # Testing
-pytest==7.4.4
-pytest-asyncio==0.23.3
-httpx==0.26.0
+pytest==8.3.4
+pytest-asyncio==0.24.0

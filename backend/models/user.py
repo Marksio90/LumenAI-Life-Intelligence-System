@@ -3,7 +3,7 @@ User Model - Authentication and User Management
 Defines user schema for MongoDB with authentication support
 """
 
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 import re
@@ -15,7 +15,8 @@ class UserBase(BaseModel):
     username: str = Field(..., min_length=3, max_length=30)
     full_name: Optional[str] = None
 
-    @validator('username')
+    @field_validator('username')
+    @classmethod
     def username_alphanumeric(cls, v):
         """Validate username is alphanumeric with underscores"""
         if not re.match(r'^[a-zA-Z0-9_]+$', v):
@@ -27,7 +28,8 @@ class UserCreate(UserBase):
     """Schema for user registration"""
     password: str = Field(..., min_length=8)
 
-    @validator('password')
+    @field_validator('password')
+    @classmethod
     def password_strength(cls, v):
         """Validate password strength"""
         if len(v) < 8:
@@ -112,7 +114,8 @@ class PasswordChange(BaseModel):
     current_password: str
     new_password: str = Field(..., min_length=8)
 
-    @validator('new_password')
+    @field_validator('new_password')
+    @classmethod
     def password_strength(cls, v):
         """Validate password strength"""
         if len(v) < 8:

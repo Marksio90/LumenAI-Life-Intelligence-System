@@ -14,7 +14,11 @@ Architektura:
 """
 
 import chromadb
-from chromadb.config import Settings
+try:
+    from chromadb.config import Settings
+except ImportError:
+    # ChromaDB 0.5+ uses Settings from main module
+    from chromadb import Settings
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 from loguru import logger
