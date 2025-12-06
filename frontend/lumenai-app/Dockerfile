@@ -26,9 +26,11 @@ EXPOSE 3000
 
 # Set environment to development
 ENV NODE_ENV=development
+ENV NEXT_PUBLIC_API_URL=http://localhost:8000
+ENV NEXT_PUBLIC_WS_URL=ws://localhost:8000
 
-# Start dev server
-CMD ["npm", "run", "dev"]
+# Start dev server with proper host binding
+CMD ["npm", "run", "dev", "--", "-H", "0.0.0.0"]
 
 # Builder stage
 FROM base AS builder

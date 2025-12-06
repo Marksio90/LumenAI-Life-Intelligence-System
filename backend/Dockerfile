@@ -23,8 +23,11 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy the entire backend directory
 COPY . .
 
-# Create logs directory
-RUN mkdir -p /app/logs
+# Create necessary directories
+RUN mkdir -p /app/logs /app/data/logs /app/data/vectordb
+
+# Set Python path to include backend directory
+ENV PYTHONPATH=/app
 
 # Expose port
 EXPOSE 8000
@@ -34,4 +37,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/api/v1/db/health || exit 1
 
 # Default command (can be overridden by docker-compose)
-CMD ["uvicorn", "gateway.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "gateway.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
