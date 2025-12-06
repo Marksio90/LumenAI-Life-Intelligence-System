@@ -59,25 +59,49 @@ export default function PlannerPage() {
 
       // Fetch tasks
       const tasksRes = await fetch(`${apiUrl}/api/v1/planner/${userId}/tasks`)
+
+      if (!tasksRes.ok) {
+        console.error(`Tasks API error: ${tasksRes.status} ${tasksRes.statusText}`)
+        throw new Error(`Błąd ładowania zadań: ${tasksRes.status}`)
+      }
+
       const tasksData = await tasksRes.json()
 
       if (tasksData.status === 'success') {
         setTasks(tasksData.tasks || [])
+      } else {
+        console.error('Tasks API returned error:', tasksData)
+        setTasks([])
       }
 
       // Fetch calendar events
       const eventsRes = await fetch(`${apiUrl}/api/v1/planner/${userId}/calendar/events`)
+
+      if (!eventsRes.ok) {
+        console.error(`Calendar API error: ${eventsRes.status} ${eventsRes.statusText}`)
+        // Don't throw - calendar is optional, tasks should still load
+        setCalendarEvents([])
+        return
+      }
+
       const eventsData = await eventsRes.json()
 
       if (eventsData.status === 'success') {
         setCalendarEvents(eventsData.events || [])
+      } else {
+        console.error('Calendar API returned error:', eventsData)
+        setCalendarEvents([])
       }
     } catch (error) {
       console.error('Error fetching planner data:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Nie udało się załadować danych planera'
       addToast({
-        message: 'Nie udało się załadować danych planera',
+        message: errorMessage,
         type: 'error'
       })
+      // Set empty arrays so UI can still render
+      setTasks([])
+      setCalendarEvents([])
     } finally {
       setLoading(false)
     }
@@ -90,6 +114,11 @@ export default function PlannerPage() {
       const response = await fetch(`${apiUrl}/api/v1/planner/${userId}/calendar/sync`, {
         method: 'POST'
       })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
       const data = await response.json()
 
       if (data.status === 'success') {
@@ -100,14 +129,15 @@ export default function PlannerPage() {
         await fetchPlannerData()
       } else {
         addToast({
-          message: 'Błąd synchronizacji kalendarza',
+          message: data.message || 'Błąd synchronizacji kalendarza',
           type: 'error'
         })
       }
     } catch (error) {
       console.error('Error syncing calendar:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Wystąpił błąd podczas synchronizacji'
       addToast({
-        message: 'Wystąpił błąd podczas synchronizacji',
+        message: errorMessage,
         type: 'error'
       })
     } finally {
@@ -138,6 +168,10 @@ export default function PlannerPage() {
         })
       })
 
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
       const data = await response.json()
 
       if (data.status === 'success') {
@@ -148,11 +182,14 @@ export default function PlannerPage() {
         setShowAddTask(false)
         resetTaskForm()
         await fetchPlannerData()
+      } else {
+        throw new Error(data.message || 'Nieprawidłowa odpowiedź serwera')
       }
     } catch (error) {
       console.error('Error creating task:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Nie udało się utworzyć zadania'
       addToast({
-        message: 'Nie udało się utworzyć zadania',
+        message: errorMessage,
         type: 'error'
       })
     }
@@ -167,11 +204,18 @@ export default function PlannerPage() {
         body: JSON.stringify({ status })
       })
 
-      if (response.ok) {
-        await fetchPlannerData()
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
+
+      await fetchPlannerData()
     } catch (error) {
       console.error('Error updating task:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Nie udało się zaktualizować zadania'
+      addToast({
+        message: errorMessage,
+        type: 'error'
+      })
     }
   }
 
@@ -184,17 +228,20 @@ export default function PlannerPage() {
         method: 'DELETE'
       })
 
-      if (response.ok) {
-        addToast({
-          message: 'Zadanie usunięte',
-          type: 'success'
-        })
-        await fetchPlannerData()
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
+
+      addToast({
+        message: 'Zadanie usunięte',
+        type: 'success'
+      })
+      await fetchPlannerData()
     } catch (error) {
       console.error('Error deleting task:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Nie udało się usunąć zadania'
       addToast({
-        message: 'Nie udało się usunąć zadania',
+        message: errorMessage,
         type: 'error'
       })
     }
