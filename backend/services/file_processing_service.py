@@ -19,7 +19,7 @@ from PIL import Image
 import PyPDF2
 import pytesseract
 
-from backend.services.rag import get_rag_pipeline, Document
+from services.rag import get_rag_pipeline, Document
 
 logger = logging.getLogger(__name__)
 

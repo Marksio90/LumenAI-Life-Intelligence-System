@@ -8,8 +8,8 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Q
 from fastapi.responses import Response, StreamingResponse
 import io
 
-from backend.services.voice_service import get_voice_service
-from backend.core.auth import get_current_user
+from services.voice_service import get_voice_service
+from core.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 

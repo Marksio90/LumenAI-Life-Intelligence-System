@@ -8,8 +8,8 @@ from datetime import datetime
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from loguru import logger
 
-from backend.models.user import UserInDB, UserCreate, UserUpdate, UserPublic
-from backend.services.auth_service import get_auth_service
+from models.user import UserInDB, UserCreate, UserUpdate, UserPublic
+from services.auth_service import get_auth_service
 
 
 class UserRepository:

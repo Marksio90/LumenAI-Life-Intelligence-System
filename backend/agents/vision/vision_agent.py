@@ -10,7 +10,7 @@ from PIL import Image
 import pytesseract
 from pathlib import Path
 
-from backend.agents.base import BaseAgent
+from agents.base import BaseAgent
 
 
 class VisionAgent(BaseAgent):
@@ -212,8 +212,8 @@ Opisuj w sposób naturalny i angażujący.
         """Analyze image using OpenAI Vision API (GPT-4V)"""
 
         try:
-            from backend.core.llm_engine import LLMEngine
-            from backend.shared.config.settings import settings
+            from core.llm_engine import LLMEngine
+            from shared.config.settings import settings
             import openai
 
             # Initialize OpenAI client
@@ -403,7 +403,7 @@ Jeśli nie ma ludzi, zwróć faces_detected: 0 i pustą listę people.
         """
 
         try:
-            from backend.shared.config.settings import settings
+            from shared.config.settings import settings
             import openai
 
             client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)

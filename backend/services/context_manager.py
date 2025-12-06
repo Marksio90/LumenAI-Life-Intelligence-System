@@ -18,8 +18,8 @@ from datetime import datetime
 from enum import Enum
 import tiktoken
 
-from backend.core.logging_config import get_logger
-from backend.services.rag import get_rag_pipeline, Document
+from core.logging_config import get_logger
+from services.rag import get_rag_pipeline, Document
 
 logger = get_logger(__name__)
 

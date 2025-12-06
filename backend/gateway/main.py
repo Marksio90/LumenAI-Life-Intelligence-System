@@ -15,32 +15,29 @@ import json
 import asyncio
 from datetime import datetime, timedelta
 
-# Add parent directory to path
-sys.path.append('..')
-
-from backend.shared.config.settings import settings
-from backend.shared.validators import validate_mongodb_id, validate_mongodb_string
-from backend.core.orchestrator import Orchestrator
-from backend.core.memory import MemoryManager
-from backend.services.mongodb_service import init_mongodb_service, get_mongodb_service
-from backend.services.chromadb_service import init_chromadb_service, get_chromadb_service
-from backend.services.embedding_service import init_embedding_service, get_embedding_service
-from backend.services.analytics_service import init_analytics_service, get_analytics_service
-from backend.services.notification_service import init_notification_service, get_notification_service
-from backend.services.auth_service import init_auth_service, get_auth_service
-from backend.services.user_repository import init_user_repository, get_user_repository
-from backend.ml.feature_engineering import FeatureEngineer
-from backend.ml.training_service import init_training_service, get_training_service
-from backend.models.user import UserCreate, UserLogin, UserPublic, UserUpdate, Token, PasswordChange, UserSettingsUpdate
-from backend.middleware.auth_middleware import (
+from shared.config.settings import settings
+from shared.validators import validate_mongodb_id, validate_mongodb_string
+from core.orchestrator import Orchestrator
+from core.memory import MemoryManager
+from services.mongodb_service import init_mongodb_service, get_mongodb_service
+from services.chromadb_service import init_chromadb_service, get_chromadb_service
+from services.embedding_service import init_embedding_service, get_embedding_service
+from services.analytics_service import init_analytics_service, get_analytics_service
+from services.notification_service import init_notification_service, get_notification_service
+from services.auth_service import init_auth_service, get_auth_service
+from services.user_repository import init_user_repository, get_user_repository
+from ml.feature_engineering import FeatureEngineer
+from ml.training_service import init_training_service, get_training_service
+from models.user import UserCreate, UserLogin, UserPublic, UserUpdate, Token, PasswordChange, UserSettingsUpdate
+from middleware.auth_middleware import (
     get_current_user_from_token,
     get_current_active_user,
     get_current_verified_user,
     get_current_superuser
 )
-from backend.middleware.rate_limit_middleware import RateLimitMiddleware, get_rate_limiter
-from backend.middleware.error_middleware import register_exception_handlers
-from backend.core.exceptions import LumenAIException
+from middleware.rate_limit_middleware import RateLimitMiddleware, get_rate_limiter
+from middleware.error_middleware import register_exception_handlers
+from core.exceptions import LumenAIException
 
 
 # Connection Manager for WebSocket
@@ -809,7 +806,7 @@ async def websocket_endpoint(
     """
     # Authenticate user with JWT token BEFORE accepting connection
     try:
-        from backend.core.auth import get_current_user_ws
+        from core.auth import get_current_user_ws
         user_data = await get_current_user_ws(token)
         user_id = user_data["user_id"]
         logger.info(f"WebSocket authentication successful for user: {user_id}")
@@ -1065,7 +1062,7 @@ async def get_cost_stats(current_user = Depends(get_current_superuser)):
     Security: Cost data is sensitive business information
     """
     try:
-        from backend.core.cost_tracker import cost_tracker
+        from core.cost_tracker import cost_tracker
         stats = cost_tracker.get_stats()
 
         # Add estimated monthly cost

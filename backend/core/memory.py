@@ -36,7 +36,7 @@ class MemoryManager:
     def _get_db(self):
         """Helper to get MongoDB service (returns None if not connected)"""
         try:
-            from backend.services.mongodb_service import get_mongodb_service
+            from services.mongodb_service import get_mongodb_service
             return get_mongodb_service()
         except:
             return None
@@ -44,7 +44,7 @@ class MemoryManager:
     def _get_rag_pipeline(self):
         """Helper to get RAG Pipeline (returns None if not initialized)"""
         try:
-            from backend.services.rag import get_rag_pipeline
+            from services.rag import get_rag_pipeline
             return get_rag_pipeline()
         except:
             return None
@@ -52,7 +52,7 @@ class MemoryManager:
     def _get_embedding_service(self):
         """Helper to get Embedding service (returns None if not initialized)"""
         try:
-            from backend.services.rag import get_embedding_service
+            from services.rag import get_embedding_service
             return get_embedding_service()
         except:
             return None
@@ -60,7 +60,7 @@ class MemoryManager:
     def _get_chunking_service(self):
         """Helper to get Chunking service (returns None if not initialized)"""
         try:
-            from backend.services.rag import get_chunking_service
+            from services.rag import get_chunking_service
             return get_chunking_service()
         except:
             return None
@@ -73,7 +73,7 @@ class MemoryManager:
 
         user = await db.get_user(user_id)
         if not user:
-            from backend.models.database import User
+            from models.database import User
             new_user = User(user_id=user_id)
             await db.create_user(new_user)
             logger.info(f"✅ Created new user: {user_id}")
@@ -102,7 +102,7 @@ class MemoryManager:
             conv_id = conversations[0].conversation_id
         else:
             # Create new conversation
-            from backend.models.database import Conversation
+            from models.database import Conversation
             conv_id = f"conv_{uuid.uuid4().hex[:16]}"
             new_conv = Conversation(
                 conversation_id=conv_id,
@@ -240,7 +240,7 @@ class MemoryManager:
         # Get or create conversation
         conversation_id = await self._get_or_create_conversation(user_id)
 
-        from backend.models.database import Message, MessageMetadata
+        from models.database import Message, MessageMetadata
 
         # 1. Zapisz wiadomość użytkownika
         user_msg_id = f"msg_{uuid.uuid4().hex[:16]}"
@@ -303,7 +303,7 @@ class MemoryManager:
 
         try:
             # Create document for indexing
-            from backend.services.rag import Document
+            from services.rag import Document
 
             doc = Document(
                 id=message_id,
@@ -441,7 +441,7 @@ class MemoryManager:
             logger.warning("MongoDB not available, mood entry not saved")
             return None
 
-        from backend.models.database import MoodEntry, MoodData, MoodContext, MoodIntervention
+        from models.database import MoodEntry, MoodData, MoodContext, MoodIntervention
 
         # Generate entry_id
         entry_id = f"mood_{uuid.uuid4().hex[:16]}"

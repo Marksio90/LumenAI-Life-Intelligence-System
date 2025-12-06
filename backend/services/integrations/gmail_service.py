@@ -9,7 +9,7 @@ from loguru import logger
 import base64
 import re
 
-from backend.services.performance_optimizer import cached, rate_limit
+from services.performance_optimizer import cached, rate_limit
 
 
 class GmailService:

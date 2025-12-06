@@ -19,11 +19,11 @@ import asyncio
 import cohere
 from rank_bm25 import BM25Okapi
 
-from backend.core.logging_config import get_logger
-from backend.core.exceptions import ServiceError
-from backend.services.rag.vector_store import VectorStore, VectorDocument, get_vector_store
-from backend.services.rag.embedding_service import EmbeddingService, get_embedding_service
-from backend.services.rag.chunking_service import ChunkingService, Document, Chunk, get_chunking_service
+from core.logging_config import get_logger
+from core.exceptions import ServiceError
+from services.rag.vector_store import VectorStore, VectorDocument, get_vector_store
+from services.rag.embedding_service import EmbeddingService, get_embedding_service
+from services.rag.chunking_service import ChunkingService, Document, Chunk, get_chunking_service
 
 logger = get_logger(__name__)
 

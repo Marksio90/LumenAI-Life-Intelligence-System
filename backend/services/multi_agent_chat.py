@@ -12,9 +12,9 @@ from datetime import datetime
 from uuid import uuid4
 from dataclasses import dataclass, field
 
-from backend.core.websocket_manager import get_connection_manager
-from backend.services.streaming_service import get_streaming_service
-from backend.core.agent_registry import get_agent_registry
+from core.websocket_manager import get_connection_manager
+from services.streaming_service import get_streaming_service
+from core.agent_registry import get_agent_registry
 
 logger = logging.getLogger(__name__)
 

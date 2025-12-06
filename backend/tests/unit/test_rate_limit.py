@@ -6,7 +6,7 @@ import pytest
 import asyncio
 from datetime import datetime, timedelta
 
-from backend.middleware.rate_limit_middleware import RateLimiter, get_user_rate_limit
+from middleware.rate_limit_middleware import RateLimiter, get_user_rate_limit
 
 
 class TestRateLimiter:

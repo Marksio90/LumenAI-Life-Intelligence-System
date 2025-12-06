@@ -8,8 +8,8 @@ from datetime import datetime, timedelta
 from loguru import logger
 import asyncio
 
-from backend.services.integrations.google_calendar_service import GoogleCalendarService
-from backend.services.performance_optimizer import cached, rate_limit
+from services.integrations.google_calendar_service import GoogleCalendarService
+from services.performance_optimizer import cached, rate_limit
 
 
 class EnhancedCalendarService(GoogleCalendarService):

@@ -8,8 +8,8 @@ from typing import AsyncGenerator
 from datetime import datetime
 
 # Fixtures for authentication testing
-from backend.services.auth_service import AuthService
-from backend.models.user import UserCreate, UserInDB
+from services.auth_service import AuthService
+from models.user import UserCreate, UserInDB
 
 
 @pytest.fixture(scope="session")

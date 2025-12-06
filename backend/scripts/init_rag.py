@@ -22,13 +22,13 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from backend.services.rag import (
+from services.rag import (
     get_vector_store,
     get_embedding_service,
     get_rag_pipeline,
     Document
 )
-from backend.core.logging_config import get_logger
+from core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -254,7 +254,7 @@ async def main():
     logger.info("   1. Make sure services are running: docker-compose -f docker-compose.rag.yml up -d")
     logger.info("   2. Start FastAPI backend: uvicorn backend.gateway.main:app --reload")
     logger.info("   3. Use RAG in your code:")
-    logger.info("      from backend.services.rag import get_rag_pipeline")
+    logger.info("      from services.rag import get_rag_pipeline")
     logger.info("      rag = get_rag_pipeline()")
     logger.info("      result = await rag.retrieve(query='your query', top_k=5)")
 

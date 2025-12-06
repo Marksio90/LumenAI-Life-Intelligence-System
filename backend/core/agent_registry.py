@@ -19,7 +19,7 @@ from enum import Enum
 import time
 from collections import defaultdict
 
-from backend.core.logging_config import get_logger
+from core.logging_config import get_logger
 
 logger = get_logger(__name__)
 

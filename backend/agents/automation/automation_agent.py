@@ -7,7 +7,7 @@ from loguru import logger
 import json
 from datetime import datetime
 
-from backend.agents.base import BaseAgent
+from agents.base import BaseAgent
 
 
 class AutomationAgent(BaseAgent):

@@ -7,7 +7,7 @@ from typing import Dict, Any, Optional
 from loguru import logger
 from datetime import datetime
 
-from backend.agents.base import BaseAgent
+from agents.base import BaseAgent
 
 
 class MoodAgent(BaseAgent):

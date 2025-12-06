@@ -8,9 +8,9 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from loguru import logger
 
-from backend.models.user import UserInDB, TokenData
-from backend.services.auth_service import get_auth_service
-from backend.services.user_repository import get_user_repository
+from models.user import UserInDB, TokenData
+from services.auth_service import get_auth_service
+from services.user_repository import get_user_repository
 
 
 # HTTP Bearer token scheme

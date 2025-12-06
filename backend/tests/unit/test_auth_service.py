@@ -5,8 +5,8 @@ Unit tests for Authentication Service
 import pytest
 from datetime import datetime, timedelta
 
-from backend.services.auth_service import AuthService
-from backend.models.user import UserCreate, TokenData
+from services.auth_service import AuthService
+from models.user import UserCreate, TokenData
 
 
 class TestPasswordHashing:

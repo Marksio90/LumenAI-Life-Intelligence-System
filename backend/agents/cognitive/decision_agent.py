@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional, List
 from loguru import logger
 import json
 
-from backend.agents.base import BaseAgent
+from agents.base import BaseAgent
 
 
 class DecisionAgent(BaseAgent):
