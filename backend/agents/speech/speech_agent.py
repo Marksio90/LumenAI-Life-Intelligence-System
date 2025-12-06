@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 import base64
 
-from backend.agents.base import BaseAgent
+from agents.base import BaseAgent
 
 
 class SpeechAgent(BaseAgent):
@@ -107,7 +107,7 @@ class SpeechAgent(BaseAgent):
         """Convert speech to text using Whisper"""
 
         try:
-            from backend.shared.config.settings import settings
+            from shared.config.settings import settings
             import openai
 
             # Initialize OpenAI client
@@ -166,7 +166,7 @@ Bądź pomocny i naturalny.
         """Convert text to speech using OpenAI TTS"""
 
         try:
-            from backend.shared.config.settings import settings
+            from shared.config.settings import settings
             import openai
 
             # Initialize OpenAI client

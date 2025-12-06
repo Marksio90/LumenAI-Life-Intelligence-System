@@ -10,7 +10,7 @@ from loguru import logger
 from typing import Optional
 from datetime import datetime
 
-from backend.shared.config.settings import settings
+from shared.config.settings import settings
 
 
 def serialize_record(record: dict) -> str:

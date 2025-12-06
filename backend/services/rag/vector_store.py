@@ -24,8 +24,8 @@ from qdrant_client.models import (
 )
 from qdrant_client.http.models import CollectionStatus
 
-from backend.core.logging_config import get_logger
-from backend.core.exceptions import ServiceError, ResourceNotFoundError
+from core.logging_config import get_logger
+from core.exceptions import ServiceError, ResourceNotFoundError
 
 logger = get_logger(__name__)
 

@@ -69,7 +69,7 @@ class BaseAgent(ABC):
             llm = self.llm_engine
         else:
             # Fallback: create new instance (for backward compatibility)
-            from backend.core.llm_engine import LLMEngine
+            from core.llm_engine import LLMEngine
             llm = LLMEngine()
 
         return await llm.generate(prompt=prompt, system_prompt=system_prompt)

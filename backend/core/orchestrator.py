@@ -8,9 +8,9 @@ from loguru import logger
 import asyncio
 from datetime import datetime
 
-from backend.core.memory import MemoryManager
-from backend.core.llm_engine import LLMEngine
-from backend.agents.base import BaseAgent
+from core.memory import MemoryManager
+from core.llm_engine import LLMEngine
+from agents.base import BaseAgent
 
 
 class Orchestrator:
@@ -30,13 +30,13 @@ class Orchestrator:
 
         # Import agents dynamically to avoid circular imports
         try:
-            from backend.agents.cognitive.planner_agent import PlannerAgent
-            from backend.agents.emotional.mood_agent import MoodAgent
-            from backend.agents.cognitive.decision_agent import DecisionAgent
-            from backend.agents.vision.vision_agent import VisionAgent
-            from backend.agents.speech.speech_agent import SpeechAgent
-            from backend.agents.planning.finance_agent import FinanceAgent
-            from backend.agents.automation.automation_agent import AutomationAgent
+            from agents.cognitive.planner_agent import PlannerAgent
+            from agents.emotional.mood_agent import MoodAgent
+            from agents.cognitive.decision_agent import DecisionAgent
+            from agents.vision.vision_agent import VisionAgent
+            from agents.speech.speech_agent import SpeechAgent
+            from agents.planning.finance_agent import FinanceAgent
+            from agents.automation.automation_agent import AutomationAgent
 
             self.agents = {
                 "planner": PlannerAgent(memory_manager=self.memory_manager, llm_engine=self.llm_engine),

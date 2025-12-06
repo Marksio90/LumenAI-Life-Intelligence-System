@@ -14,7 +14,7 @@ from uuid import uuid4
 from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
 
-from backend.core.websocket_manager import get_connection_manager
+from core.websocket_manager import get_connection_manager
 
 logger = logging.getLogger(__name__)
 

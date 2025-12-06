@@ -7,8 +7,8 @@ from typing import List, Optional
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Query
 from fastapi.responses import JSONResponse
 
-from backend.services.file_processing_service import get_file_processing_service
-from backend.core.auth import get_current_user
+from services.file_processing_service import get_file_processing_service
+from core.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 

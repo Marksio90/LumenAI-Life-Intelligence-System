@@ -10,25 +10,25 @@ Enterprise-grade RAG implementation with:
 - Redis caching
 """
 
-from backend.services.rag.vector_store import (
+from services.rag.vector_store import (
     VectorStore,
     VectorDocument,
     CollectionConfig,
     get_vector_store
 )
-from backend.services.rag.embedding_service import (
+from services.rag.embedding_service import (
     EmbeddingService,
     EmbeddingResult,
     get_embedding_service
 )
-from backend.services.rag.chunking_service import (
+from services.rag.chunking_service import (
     ChunkingService,
     Chunk,
     Document,
     ChunkingStrategy,
     get_chunking_service
 )
-from backend.services.rag.rag_pipeline import (
+from services.rag.rag_pipeline import (
     RAGPipeline,
     RAGResult,
     QueryExpansion,

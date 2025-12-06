@@ -22,8 +22,8 @@ import redis.asyncio as redis
 from openai import AsyncOpenAI
 import tiktoken
 
-from backend.core.logging_config import get_logger
-from backend.core.exceptions import ServiceError
+from core.logging_config import get_logger
+from core.exceptions import ServiceError
 
 logger = get_logger(__name__)
 

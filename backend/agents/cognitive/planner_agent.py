@@ -7,8 +7,8 @@ from loguru import logger
 from datetime import datetime, timedelta
 import json
 
-from backend.agents.base import BaseAgent
-from backend.services.integrations.google_calendar_service import GoogleCalendarService
+from agents.base import BaseAgent
+from services.integrations.google_calendar_service import GoogleCalendarService
 
 
 class PlannerAgent(BaseAgent):

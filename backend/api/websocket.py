@@ -12,11 +12,11 @@ from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query, status
 from fastapi.responses import JSONResponse
 
-from backend.core.websocket_manager import get_connection_manager
-from backend.services.streaming_service import get_streaming_service
-from backend.core.auth import get_current_user_ws  # WebSocket auth helper
-from backend.core.memory import get_memory_manager
-from backend.middleware.auth_middleware import get_current_superuser  # For admin endpoints
+from core.websocket_manager import get_connection_manager
+from services.streaming_service import get_streaming_service
+from core.auth import get_current_user_ws  # WebSocket auth helper
+from core.memory import get_memory_manager
+from middleware.auth_middleware import get_current_superuser  # For admin endpoints
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ async def websocket_chat(
 
     # Authenticate user with JWT token
     try:
-        from backend.core.auth import get_current_user_ws
+        from core.auth import get_current_user_ws
         user_data = await get_current_user_ws(token)
         user_id = user_data["user_id"]
     except Exception as e:
@@ -154,7 +154,7 @@ async def websocket_agent(
 
     # Authenticate with JWT token
     try:
-        from backend.core.auth import get_current_user_ws
+        from core.auth import get_current_user_ws
         user_data = await get_current_user_ws(token)
         user_id = user_data["user_id"]
     except Exception as e:
@@ -213,7 +213,7 @@ async def websocket_notifications(
 
     # Authenticate with JWT token
     try:
-        from backend.core.auth import get_current_user_ws
+        from core.auth import get_current_user_ws
         user_data = await get_current_user_ws(token)
         user_id = user_data["user_id"]
     except Exception as e:

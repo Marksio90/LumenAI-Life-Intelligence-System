@@ -12,9 +12,9 @@ import json
 import asyncio
 from cachetools import TTLCache
 
-from backend.shared.config.settings import settings
-from backend.core.cost_tracker import cost_tracker
-from backend.core.model_router import model_router
+from shared.config.settings import settings
+from core.cost_tracker import cost_tracker
+from core.model_router import model_router
 
 # Timeout for external API calls (30 seconds)
 LLM_API_TIMEOUT = 30.0

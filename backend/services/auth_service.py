@@ -12,8 +12,8 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from loguru import logger
 
-from backend.models.user import UserInDB, UserCreate, TokenData
-from backend.shared.config.settings import settings
+from models.user import UserInDB, UserCreate, TokenData
+from shared.config.settings import settings
 
 
 # Password hashing context

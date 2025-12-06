@@ -83,7 +83,7 @@ pytest -m "not slow"
 
 ```python
 import pytest
-from backend.services.auth_service import AuthService
+from services.auth_service import AuthService
 
 class TestAuthService:
     @pytest.fixture

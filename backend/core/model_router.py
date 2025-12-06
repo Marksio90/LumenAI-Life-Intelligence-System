@@ -6,7 +6,7 @@ Automatically selects the cheapest model for the task complexity
 from typing import Dict, Literal
 from loguru import logger
 
-from backend.shared.config.settings import settings
+from shared.config.settings import settings
 
 
 ModelTier = Literal["fast", "default", "smart"]

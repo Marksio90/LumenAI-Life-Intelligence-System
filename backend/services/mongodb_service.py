@@ -16,7 +16,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 import logging
 
-from backend.models.database import (
+from models.database import (
     User, Conversation, Message, MoodEntry, UserContext,
     model_to_dict
 )

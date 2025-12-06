@@ -7,7 +7,7 @@ from loguru import logger
 from datetime import datetime, timedelta
 import json
 
-from backend.agents.base import BaseAgent
+from agents.base import BaseAgent
 
 
 class FinanceAgent(BaseAgent):

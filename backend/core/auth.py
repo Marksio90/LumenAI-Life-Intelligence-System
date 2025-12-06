@@ -9,8 +9,8 @@ from fastapi import Depends, HTTPException, status, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from loguru import logger
 
-from backend.services.auth_service import get_auth_service
-from backend.services.user_repository import get_user_repository
+from services.auth_service import get_auth_service
+from services.user_repository import get_user_repository
 
 
 security = HTTPBearer()

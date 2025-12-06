@@ -12,7 +12,7 @@ from typing import Union
 import traceback
 from datetime import datetime
 
-from backend.core.exceptions import LumenAIException
+from core.exceptions import LumenAIException
 
 
 class ErrorHandlingMiddleware:
@@ -295,7 +295,7 @@ def register_exception_handlers(app):
     Register all exception handlers with FastAPI app.
 
     Usage:
-        from backend.middleware.error_middleware import register_exception_handlers
+        from middleware.error_middleware import register_exception_handlers
         register_exception_handlers(app)
     """
     from fastapi.exceptions import RequestValidationError
