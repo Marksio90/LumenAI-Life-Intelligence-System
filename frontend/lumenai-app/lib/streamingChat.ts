@@ -28,12 +28,21 @@ export async function streamChatResponse(
 
   let fullResponse = ''
   let controller: AbortController | null = null
+  let timeoutId: NodeJS.Timeout | null = null
 
   try {
     onStart?.()
 
     // Use fetch with ReadableStream for SSE
     controller = new AbortController()
+
+    // Set a timeout for the request (30 seconds)
+    timeoutId = setTimeout(() => {
+      if (controller) {
+        controller.abort()
+        onError(new Error('Przekroczono limit czasu żądania'))
+      }
+    }, 30000)
 
     const response = await fetch(`${apiUrl}/api/v1/chat/stream`, {
       method: 'POST',
@@ -102,13 +111,21 @@ export async function streamChatResponse(
   } catch (error) {
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
-        onError(new Error('Stream cancelled by user'))
+        onError(new Error('Anulowano przez użytkownika'))
+      } else if (error.message.includes('Failed to fetch')) {
+        onError(new Error('Nie można połączyć się z serwerem. Sprawdź połączenie.'))
       } else {
         onError(error)
       }
     } else {
-      onError(new Error('Unknown streaming error'))
+      onError(new Error('Nieznany błąd streamingu'))
     }
+  } finally {
+    // Clean up
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
+    controller = null
   }
 }
 

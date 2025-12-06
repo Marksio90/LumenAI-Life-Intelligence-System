@@ -26,19 +26,29 @@ export default function ChatInterface() {
   const streamingMessageIdRef = useRef<string | null>(null)
   const typingBufferRef = useRef<TypingEffectBuffer | null>(null)
 
-  const { messages, isTyping, sendMessage, connectWebSocket, userId, addMessage, addToast } = useChatStore(state => ({
+  const { messages, isTyping, sendMessage, connectWebSocket, userId, addMessage, updateMessage, addToast } = useChatStore(state => ({
     messages: state.messages,
     isTyping: state.isTyping,
     sendMessage: state.sendMessage,
     connectWebSocket: state.connectWebSocket,
     userId: state.userId,
     addMessage: state.addMessage,
+    updateMessage: state.updateMessage,
     addToast: state.addToast
   }))
 
   useEffect(() => {
     // Connect to WebSocket on mount
     connectWebSocket()
+
+    // Cleanup on unmount
+    return () => {
+      // Stop typing buffer if active
+      if (typingBufferRef.current) {
+        typingBufferRef.current.stop()
+        typingBufferRef.current = null
+      }
+    }
   }, [connectWebSocket])
 
   useEffect(() => {
@@ -89,15 +99,8 @@ export default function ChatInterface() {
     // Initialize typing buffer
     typingBufferRef.current = new TypingEffectBuffer((text) => {
       setStreamingText(text)
-      // Update message in place
-      const messagesClone = [...messages]
-      const msgIndex = messagesClone.findIndex(m => m.id === streamingMsgId)
-      if (msgIndex !== -1) {
-        messagesClone[msgIndex] = {
-          ...messagesClone[msgIndex],
-          content: text
-        }
-      }
+      // Update message in store
+      updateMessage(streamingMsgId, { content: text })
     }, 30)
 
     try {
@@ -116,20 +119,10 @@ export default function ChatInterface() {
             setStreamingText(fullResponse)
             setIsStreaming(false)
 
-            // Update final message
-            const finalMsg = {
-              id: streamingMsgId,
-              role: 'assistant' as const,
-              content: fullResponse,
-              timestamp: new Date()
-            }
-
-            // Replace streaming message with final
-            const messagesClone = [...messages]
-            const msgIndex = messagesClone.findIndex(m => m.id === streamingMsgId)
-            if (msgIndex !== -1) {
-              messagesClone[msgIndex] = finalMsg
-            }
+            // Update final message in store
+            updateMessage(streamingMsgId, {
+              content: fullResponse
+            })
 
             streamingMessageIdRef.current = null
           },
@@ -139,11 +132,16 @@ export default function ChatInterface() {
             console.error('Streaming error:', error)
 
             addToast({
-              message: 'Błąd streamingu. Spróbuj ponownie.',
+              message: `Błąd streamingu: ${error.message}. Spróbuj ponownie.`,
               type: 'error'
             })
 
-            // Remove failed streaming message
+            // Update message with error
+            if (streamingMessageIdRef.current) {
+              updateMessage(streamingMessageIdRef.current, {
+                content: `❌ Błąd: ${error.message}`
+              })
+            }
             streamingMessageIdRef.current = null
           },
           onStart: () => {

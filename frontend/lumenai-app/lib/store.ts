@@ -34,6 +34,7 @@ interface ChatState {
   socket: WebSocket | null
   userId: string
   addMessage: (message: Message) => void
+  updateMessage: (id: string, updates: Partial<Message>) => void
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void
   markNotificationRead: (id: string) => void
   markAllNotificationsRead: () => void
@@ -72,6 +73,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   addMessage: (message) =>
     set((state) => ({
       messages: [...state.messages, message]
+    })),
+
+  updateMessage: (id, updates) =>
+    set((state) => ({
+      messages: state.messages.map((msg) =>
+        msg.id === id ? { ...msg, ...updates } : msg
+      )
     })),
 
   addNotification: (notification) =>
