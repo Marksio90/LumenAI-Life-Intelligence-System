@@ -12,6 +12,12 @@ services:
       - MONGO_INITDB_DATABASE=lumenai
     networks:
       - lumenai-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # ChromaDB Vector Database
   chromadb:
@@ -24,6 +30,12 @@ services:
       - chromadb_data:/chroma/chroma
     networks:
       - lumenai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # Redis (Optional - for caching)
   redis:
@@ -36,6 +48,11 @@ services:
       - redis_data:/data
     networks:
       - lumenai-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Backend API
   backend:
@@ -53,22 +70,26 @@ services:
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
       - REDIS_URL=redis://redis:6379
+      - PYTHONPATH=/app
     depends_on:
-      - mongodb
-      - chromadb
-      - redis
+      mongodb:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
-      - ./backend:/app
       - ./logs:/app/logs
+      - backend_data:/app/data
     networks:
       - lumenai-network
-    command: uvicorn gateway.main:app --host 0.0.0.0 --port 8000 --reload
 
   # Frontend (Next.js)
   frontend:
     build:
       context: ./frontend/lumenai-app
       dockerfile: Dockerfile
+      target: dev
     container_name: lumenai-frontend
     restart: unless-stopped
     ports:
@@ -76,15 +97,12 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
       - NEXT_PUBLIC_WS_URL=ws://localhost:8000
+      - NODE_ENV=development
     depends_on:
-      - backend
-    volumes:
-      - ./frontend/lumenai-app:/app
-      - /app/node_modules
-      - /app/.next
+      backend:
+        condition: service_healthy
     networks:
       - lumenai-network
-    command: npm run dev
 
 volumes:
   mongodb_data:
@@ -92,6 +110,8 @@ volumes:
   chromadb_data:
     driver: local
   redis_data:
+    driver: local
+  backend_data:
     driver: local
 
 networks:
